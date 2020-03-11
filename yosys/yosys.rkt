@@ -6,6 +6,7 @@
          (only-in racket/base
                   in-range
                   for/list))
+(require memo)
 
 ; XXX this seems inefficient
 (define (vector-update vec pos v)
@@ -53,7 +54,7 @@
     ; regular case
     [(_ name:id ((input:id input-type)) return-type body:expr)
      #'(begin
-         (define (name input)
+         (define/memoize (name input)
            body)
          (provide name))]
     ; transition function: treated specially
