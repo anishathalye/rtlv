@@ -15,37 +15,55 @@
   vec*)
 
 (begin-for-syntax
-  (define-syntax-class yosys-member
+  (define-splicing-syntax-class yosys-type
+    #:attributes (ctor)
+    (pattern (~datum Bool)
+             #:attr ctor (lambda (name-stx)
+                           #`(let ()
+                               (define-symbolic* #,name-stx boolean?)
+                               #,name-stx)))
+    (pattern ((~datum _) (~datum BitVec) num:nat)
+             #:attr ctor (lambda (name-stx)
+                           #`(let ()
+                               (define-symbolic* #,name-stx (bitvector num))
+                               #,name-stx)))
+    (pattern ((~datum Array) ((~datum _) (~datum BitVec) depth:nat) ((~datum _) (~datum BitVec) width:nat))
+             #:attr ctor (lambda (name-stx)
+                           #`(list->vector
+                              (for/list ([i (in-range (expt 2 depth))])
+                                (let () (define-symbolic* #,name-stx (bitvector width)) #,name-stx))))))
+
+  (define-splicing-syntax-class yosys-member
+    #:attributes (external-name name ctor kw)
+    (pattern (~seq (name:id type:yosys-type) external-name:id)
+             #:attr kw (datum->syntax #'name (string->keyword (symbol->string (syntax-e #'name))))
+             #:attr ctor ((attribute type.ctor) #'field-name)))
+
+  (define-syntax-class yosys-initial-state
     #:attributes (name ctor kw)
     (pattern (name:id (~datum Bool))
              #:attr kw (datum->syntax #'name (string->keyword (symbol->string (syntax-e #'name))))
-             #:attr ctor #'(let () (define-symbolic* name boolean?) name))
-    (pattern (name:id ((~datum _) (~datum BitVec) num:expr))
-             #:attr kw (datum->syntax #'name (string->keyword (symbol->string (syntax-e #'name))))
-             #:attr ctor #'(let () (define-symbolic* name (bitvector num)) name))
-    (pattern (name:id ((~datum Array) ((~datum _) (~datum BitVec) depth:expr)
-                               ((~datum _) (~datum BitVec) width:expr)))
-             #:attr kw (datum->syntax #'name (string->keyword (symbol->string (syntax-e #'name))))
-             #:attr ctor #'(list->vector (for/list ([i (in-range (expt 2 depth))])
-                                           (let () (define-symbolic* name (bitvector width)) name))))))
+             #:attr ctor #'(let () (define-symbolic* name boolean?) name))))
 
 (define-syntax (declare-datatype stx)
   (syntax-parse stx
     [(_ datatype-name:id ((_
-                  member:yosys-member ...)))
+                           init:yosys-initial-state
+                           member:yosys-member ...)))
      #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'datatype-name)
      #`(begin
-         (struct datatype-name (member.name ...)
+         (struct datatype-name (init.name member.name ...)
            #:transparent)
          (provide datatype-name)
-         #,@(for/list ([member-name (syntax->list #'(member.name ...))])
+         #,@(for/list ([member-name (syntax->list #'(init.name member.name ...))])
              (define getter (format-id stx "~a-~a" #'datatype-name member-name))
              #`(begin
                  (define (#,member-name x) (#,getter x))
                  (provide #,getter)
                  (provide #,member-name)))
-         (define (new-symbolic-name (~@ member.kw [member.name member.ctor]) ...)
-           (datatype-name member.name ...))
+         (define (new-symbolic-name init.kw [init.name init.ctor]
+                                    (~@ member.kw [member.name member.ctor]) ...)
+           (datatype-name init.name member.name ...))
          (provide new-symbolic-name))]))
 (provide declare-datatype)
 
@@ -97,3 +115,43 @@
 (define (= x y)
   (equal? x y))
 (provide =)
+
+; no interpretation yet
+(define-simple-macro (yosys-smt2-stdt)
+  (void))
+(provide yosys-smt2-stdt)
+
+; no interpretation yet
+(define-simple-macro (yosys-smt2-module name:id)
+  (void))
+(provide yosys-smt2-module)
+
+; no interpretation yet
+(define-simple-macro (yosys-smt2-topmod name:id)
+  (void))
+(provide yosys-smt2-topmod)
+
+; no interpretation yet
+(define-simple-macro (yosys-smt2-clock name:id 'edge:id)
+  (void))
+(provide yosys-smt2-clock)
+
+; no interpretation yet
+(define-simple-macro (yosys-smt2-input name:id width:nat)
+  (void))
+(provide yosys-smt2-input)
+
+; no interpretation yet
+(define-simple-macro (yosys-smt2-output name:id width:nat)
+  (void))
+(provide yosys-smt2-output)
+
+; no interpretation yet
+(define-simple-macro (yosys-smt2-register name:id width:nat)
+  (void))
+(provide yosys-smt2-register)
+
+; no interpretation yet
+(define-simple-macro (yosys-smt2-memory name:id bits:nat width:nat read-ports:nat write-ports:nat 'sync:id)
+  (void))
+(provide yosys-smt2-memory)
