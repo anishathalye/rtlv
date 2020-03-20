@@ -2,11 +2,16 @@
 
 (require (for-syntax syntax/parse
                      racket/syntax)
-         syntax/parse/define
+         syntax/parse/define)
+
+; we need to be careful of what we import for runtime, because
+; whatever we use needs to be compatible with Rosette
+(require
          (only-in racket/base
                   in-range
-                  for/list))
-(require memo)
+                  for/list
+                  struct-copy)
+         memo)
 
 ; XXX this seems inefficient
 (define (vector-update vec pos v)
@@ -76,7 +81,14 @@
            body)
          (provide name))]
     ; transition function: treated specially
-    ; case 1: when state has a single field
+    ; case 1: when module is purely combinatorial
+    [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
+        (~datum true))
+     #'(begin
+         (define (name state)
+           (struct-copy type state))
+         (provide name))]
+    ; case 2: when state has a single field
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum =) e (field:id (~datum next_state))))
      #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'type)
@@ -84,7 +96,7 @@
          (define (name state)
            (new-symbolic-name #,(string->keyword (symbol->string (syntax-e #'field))) e))
          (provide name))]
-    ; case 2: when state has multiple fields
+    ; case 3: when state has multiple fields
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum and) ((~datum =) e (field:id (~datum next_state))) ...))
      #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'type)
@@ -124,6 +136,11 @@
 (define (= x y)
   (equal? x y))
 (provide =)
+
+; to match SMTLIB's xor, which can take multiple arguments
+(define (varargs-xor . args)
+  (foldl xor #f args))
+(provide (rename-out [varargs-xor xor]))
 
 ; no interpretation yet
 (define-simple-macro (yosys-smt2-stdt)
