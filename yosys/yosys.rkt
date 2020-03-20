@@ -39,15 +39,13 @@
                                 (let () (define-symbolic* #,name-stx (bitvector width)) #,name-stx))))))
 
   (define-splicing-syntax-class yosys-member
-    #:attributes (external-name name ctor kw)
+    #:attributes (external-name name ctor)
     (pattern (~seq (name:id type:yosys-type) external-name:id)
-             #:attr kw (datum->syntax #'name (string->keyword (symbol->string (syntax-e #'name))))
              #:attr ctor ((attribute type.ctor) #'name)))
 
   (define-syntax-class yosys-initial-state
-    #:attributes (name ctor kw)
+    #:attributes (name ctor)
     (pattern (name:id (~datum Bool))
-             #:attr kw (datum->syntax #'name (string->keyword (symbol->string (syntax-e #'name))))
              #:attr ctor #'(let () (define-symbolic* name boolean?) name))))
 
 (define-syntax (declare-datatype stx)
@@ -66,9 +64,8 @@
                  (define (#,member-name x) (#,getter x))
                  (provide #,getter)
                  (provide #,member-name)))
-         (define (new-symbolic-name init.kw [init.name init.ctor]
-                                    (~@ member.kw [member.name member.ctor]) ...)
-           (datatype-name init.name member.name ...))
+         (define (new-symbolic-name)
+           (datatype-name init.ctor member.ctor ...))
          (provide new-symbolic-name))]))
 (provide declare-datatype)
 
@@ -94,19 +91,15 @@
      #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'type)
      #`(begin
          (define (name state)
-           (new-symbolic-name #,(string->keyword (symbol->string (syntax-e #'field))) e))
+           (struct-copy type state [field e]))
          (provide name))]
     ; case 3: when state has multiple fields
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum and) ((~datum =) e (field:id (~datum next_state))) ...))
      #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'type)
-     #:with (kw ...) (datum->syntax
-                      #'name
-                      (for/list ([f (syntax->list #'(field ...))])
-                        (string->keyword (symbol->string (syntax-e f)))))
      #`(begin
          (define (name state)
-           (new-symbolic-name (~@ kw e) ...))
+           (struct-copy type state [field e] ...))
          (provide name))]))
 (provide define-fun)
 
