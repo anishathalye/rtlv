@@ -21,32 +21,40 @@
 
 (begin-for-syntax
   (define-splicing-syntax-class yosys-type
-    #:attributes (ctor)
+    #:attributes (ctor zero-ctor)
     (pattern (~datum Bool)
              #:attr ctor (lambda (name-stx)
                            #`(let ()
                                (define-symbolic* #,name-stx boolean?)
-                               #,name-stx)))
+                               #,name-stx))
+             #:attr zero-ctor (lambda (name-stx) #`#f))
     (pattern ((~datum _) (~datum BitVec) num:nat)
              #:attr ctor (lambda (name-stx)
                            #`(let ()
                                (define-symbolic* #,name-stx (bitvector num))
-                               #,name-stx)))
+                               #,name-stx))
+             #:attr zero-ctor (lambda (name-stx) #`(bv 0 num)))
     (pattern ((~datum Array) ((~datum _) (~datum BitVec) depth:nat) ((~datum _) (~datum BitVec) width:nat))
              #:attr ctor (lambda (name-stx)
                            #`(list->vector
                               (for/list ([i (in-range (expt 2 depth))])
-                                (let () (define-symbolic* #,name-stx (bitvector width)) #,name-stx))))))
+                                (let () (define-symbolic* #,name-stx (bitvector width)) #,name-stx))))
+             #:attr zero-ctor (lambda (name-stx)
+                           #`(list->vector
+                              (for/list ([i (in-range (expt 2 depth))])
+                                (bv 0 width))))))
 
   (define-splicing-syntax-class yosys-member
-    #:attributes (external-name name ctor)
+    #:attributes (external-name name ctor zero-ctor)
     (pattern (~seq (name:id type:yosys-type) external-name:id)
-             #:attr ctor ((attribute type.ctor) #'name)))
+             #:attr ctor ((attribute type.ctor) #'name)
+             #:attr zero-ctor ((attribute type.zero-ctor) #'name)))
 
   (define-syntax-class yosys-initial-state
-    #:attributes (name ctor)
+    #:attributes (name ctor zero-ctor)
     (pattern (name:id (~datum Bool))
-             #:attr ctor #'(let () (define-symbolic* name boolean?) name))))
+             #:attr ctor #'(let () (define-symbolic* name boolean?) name)
+             #:attr zero-ctor #'#f)))
 
 (define-syntax (declare-datatype stx)
   (syntax-parse stx
@@ -54,6 +62,7 @@
                            init:yosys-initial-state
                            member:yosys-member ...)))
      #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'datatype-name)
+     #:with new-zeroed-name (format-id stx "new-zeroed-~a" #'datatype-name)
      #`(begin
          (struct datatype-name (init.name member.name ...)
            #:transparent)
@@ -66,7 +75,10 @@
                  (provide #,member-name)))
          (define (new-symbolic-name)
            (datatype-name init.ctor member.ctor ...))
-         (provide new-symbolic-name))]))
+         (provide new-symbolic-name)
+         (define (new-zeroed-name)
+           (datatype-name init.zero-ctor member.zero-ctor ...))
+         (provide new-zeroed-name))]))
 (provide declare-datatype)
 
 (define-syntax (define-fun stx)
