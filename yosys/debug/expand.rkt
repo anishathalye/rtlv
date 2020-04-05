@@ -11,4 +11,7 @@
   (syntax-parse stx
     [(_ form ...)
      #`(#%module-begin
-        (pretty-print (syntax->datum (expand-syntax-once #'form))) ...)]))
+        (pretty-print
+         (syntax->datum (expand-syntax-once #'form))
+         (current-output-port)
+         1) ...)]))
