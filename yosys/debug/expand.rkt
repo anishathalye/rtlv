@@ -1,6 +1,7 @@
 #lang racket
 
 (require "../main.rkt"
+         racket/pretty
          (for-syntax syntax/parse))
 
 (provide (except-out (all-from-out "../main.rkt") #%module-begin)
@@ -10,4 +11,4 @@
   (syntax-parse stx
     [(_ form ...)
      #`(#%module-begin
-        (syntax->datum (expand-syntax-once #'form)) ...)]))
+        (pretty-print (syntax->datum (expand-syntax-once #'form))) ...)]))
