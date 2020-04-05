@@ -11,7 +11,6 @@
   (syntax-parse stx
     [(_ form ...)
      #`(#%module-begin
-        (pretty-print
-         (syntax->datum (expand-syntax-once #'form))
-         (current-output-port)
-         1) ...)]))
+        (let ([expanded (syntax->datum (expand-syntax-once #'form))])
+          (when (not (equal? expanded '(void)))
+            (pretty-print expanded (current-output-port) 1))) ...)]))
