@@ -31,3 +31,10 @@
   (check-equal?
    (evaluate (|counter_n count| s0) model)
    (bv #b11111111 8)))
+
+(test-case "inputs/outputs/registers"
+  (check-equal? (length inputs) 3)
+  (check-equal? (length outputs) 1)
+  (check-eq? (first outputs) |counter_n count|)
+  (check-equal? (length registers) 1)
+  (check-eq? (first registers) |counter_n count|))

@@ -12,7 +12,8 @@
   (only-in racket/base
            in-range
            for/list
-           struct-copy))
+           struct-copy
+           for))
   memo)
 
 ; XXX this seems inefficient
@@ -86,12 +87,15 @@
                                [v (syntax->list #'(value /...))])
                       #`(#,(datum->syntax #'datatype-name (hash-ref name-assoc (syntax-e i))) #,v)))
               ]))
-         #,@(for/list ([internal-name (syntax->list #'(init.name member.name ...))]
-                       [external-name (syntax->list #'(init.name member.external-name ...))])
-             (define getter (format-id stx "~a-~a" #'datatype-name external-name))
-             #`(begin
-                 (define (#,internal-name x) (#,getter x))
-                 (provide #,getter)))
+         #,(let ([init-getter (format-id stx "~a-~a" #'datatype-name #'init.name)])
+             #`(define init.name #,init-getter))
+         #,@(for/list ([internal-name (syntax->list #'(member.name ...))]
+                       [external-name (syntax->list #'(member.external-name ...))])
+              (define getter (format-id stx "~a-~a" #'datatype-name external-name))
+              #`(begin
+                  (define #,internal-name #,getter) ; for internal use only, not exported
+                  (define #,external-name #,getter)
+                  (provide #,getter)))
          (define (new-symbolic-name)
            (datatype-name init.ctor member.ctor ...))
          (provide new-symbolic-name)
@@ -100,6 +104,16 @@
          (provide new-zeroed-name))]))
 (provide declare-datatype)
 
+(define define-fun-hooks '())
+
+(define (add-define-fun-hook hook)
+  (set! define-fun-hooks (cons hook define-fun-hooks)))
+
+(define (trigger-hooks fn)
+  (racket:for ([hook define-fun-hooks])
+    (hook fn))
+  (set! define-fun-hooks '()))
+
 (define-syntax (define-fun stx)
   (syntax-parse stx
     ; regular case
@@ -107,7 +121,8 @@
      #'(begin
          (define/memoize (name input)
            body)
-         (provide name))]
+         (provide name)
+         (trigger-hooks name))]
     ; transition function: treated specially
     ; case 1: when module is purely combinatorial
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
@@ -116,7 +131,8 @@
      #'(begin
          (define (name state)
            (internal-copy-name type state))
-         (provide name))]
+         (provide name)
+         (trigger-hooks name))]
     ; case 2: when state has a single field
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum =) e (field:id (~datum next_state))))
@@ -124,7 +140,8 @@
      #`(begin
          (define (name state)
            (internal-copy-name type state [field e]))
-         (provide name))]
+         (provide name)
+         (trigger-hooks name))]
     ; case 3: when state has multiple fields
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum and) ((~datum =) e (field:id (~datum next_state))) ...))
@@ -132,7 +149,8 @@
      #`(begin
          (define (name state)
            (internal-copy-name type state [field e] ...))
-         (provide name))]))
+         (provide name)
+         (trigger-hooks name))]))
 (provide define-fun)
 
 (define (extractor i j)
@@ -167,9 +185,24 @@
   (foldl xor #f args))
 (provide (rename-out [varargs-xor xor]))
 
-; no interpretation yet
-(define-simple-macro (yosys-smt2-stdt)
-  (void))
+; this appears at the top of the extraction, so we can put global
+; top-level definitions here
+(define-syntax (yosys-smt2-stdt stx)
+  (syntax-parse stx
+    [(_)
+     #:with inputs (format-id stx "inputs")
+     #:with outputs (format-id stx "outputs")
+     #:with registers (format-id stx "registers")
+     #:with memories (format-id stx "memories")
+     #'(begin
+         (define inputs '())
+         (provide inputs)
+         (define outputs '())
+         (provide outputs)
+         (define registers '())
+         (provide registers)
+         (define memories '())
+         (provide memories))]))
 (provide yosys-smt2-stdt)
 
 ; no interpretation yet
@@ -187,22 +220,33 @@
   (void))
 (provide yosys-smt2-clock)
 
-; no interpretation yet
-(define-simple-macro (yosys-smt2-input name:id width:nat)
-  (void))
+(define-simple-macro (make-appender lst)
+  (lambda (i) (set! lst (cons i lst))))
+
+(define-syntax (yosys-smt2-input stx)
+  (syntax-parse stx
+    [(_ name:id width:nat)
+     #:with inputs (format-id stx "inputs")
+     #'(add-define-fun-hook (make-appender inputs))]))
 (provide yosys-smt2-input)
 
-; no interpretation yet
-(define-simple-macro (yosys-smt2-output name:id width:nat)
-  (void))
+(define-syntax (yosys-smt2-output stx)
+  (syntax-parse stx
+    [(_ name:id width:nat)
+     #:with outputs (format-id stx "outputs")
+     #'(add-define-fun-hook (make-appender outputs))]))
 (provide yosys-smt2-output)
 
-; no interpretation yet
-(define-simple-macro (yosys-smt2-register name:id width:nat)
-  (void))
+(define-syntax (yosys-smt2-register stx)
+  (syntax-parse stx
+    [(_ name:id width:nat)
+     #:with registers (format-id stx "registers")
+     #'(add-define-fun-hook (make-appender registers))]))
 (provide yosys-smt2-register)
 
-; no interpretation yet
-(define-simple-macro (yosys-smt2-memory name:id bits:nat width:nat read-ports:nat write-ports:nat 'sync:id)
-  (void))
+(define-syntax (yosys-smt2-memory stx)
+  (syntax-parse stx
+    [(_ name:id bits:nat width:nat read-ports:nat write-ports:nat 'sync:id)
+    #:with memories (format-id stx "memories")
+     #'(add-define-fun-hook (make-appender memories))]))
 (provide yosys-smt2-memory)
