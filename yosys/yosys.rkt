@@ -7,11 +7,13 @@
 ; we need to be careful of what we import for runtime, because
 ; whatever we use needs to be compatible with Rosette
 (require
-         (only-in racket/base
-                  in-range
-                  for/list
-                  struct-copy)
-         memo)
+ (prefix-in
+  racket:
+  (only-in racket/base
+           in-range
+           for/list
+           struct-copy))
+  memo)
 
 ; XXX this seems inefficient
 (define (vector-update vec pos v)
@@ -37,11 +39,11 @@
     (pattern ((~datum Array) ((~datum _) (~datum BitVec) depth:nat) ((~datum _) (~datum BitVec) width:nat))
              #:attr ctor (lambda (name-stx)
                            #`(list->vector
-                              (for/list ([i (in-range (expt 2 depth))])
+                              (racket:for/list ([i (racket:in-range (expt 2 depth))])
                                 (let () (define-symbolic* #,name-stx (bitvector width)) #,name-stx))))
              #:attr zero-ctor (lambda (name-stx)
                            #`(list->vector
-                              (for/list ([i (in-range (expt 2 depth))])
+                              (racket:for/list ([i (racket:in-range (expt 2 depth))])
                                 (bv 0 width))))))
 
   (define-splicing-syntax-class yosys-member
@@ -77,7 +79,7 @@
          (define-syntax (internal-copy-name stx)
            (syntax-parse stx
              [(_ type state [internal-name value] /...)
-              #`(struct-copy
+              #`(racket:struct-copy
                  type
                  state
                  #,@(for/list ([i (syntax->list #'(internal-name /...))]
