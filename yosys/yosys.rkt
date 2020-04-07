@@ -61,18 +61,35 @@
     [(_ datatype-name:id ((_
                            init:yosys-initial-state
                            member:yosys-member ...)))
+     #:with internal-copy-name (format-id stx "internal-copy-~a" #'datatype-name)
      #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'datatype-name)
      #:with new-zeroed-name (format-id stx "new-zeroed-~a" #'datatype-name)
+     #:with name-assoc (format-id stx "~a-name-assoc" #'datatype-name)
+     #:with /... (quote-syntax ...)
      #`(begin
-         (struct datatype-name (init.name member.name ...)
+         (struct datatype-name (init.name member.external-name ...)
            #:transparent)
          (provide datatype-name)
-         #,@(for/list ([member-name (syntax->list #'(init.name member.name ...))])
-             (define getter (format-id stx "~a-~a" #'datatype-name member-name))
+         ; like struct-copy, but uses the internal names instead of external names
+         (begin-for-syntax
+           (define name-assoc
+             (make-hash '((member.name . member.external-name) ...))))
+         (define-syntax (internal-copy-name stx)
+           (syntax-parse stx
+             [(_ type state [internal-name value] /...)
+              #`(struct-copy
+                 type
+                 state
+                 #,@(for/list ([i (syntax->list #'(internal-name /...))]
+                               [v (syntax->list #'(value /...))])
+                      #`(#,(datum->syntax #'datatype-name (hash-ref name-assoc (syntax-e i))) #,v)))
+              ]))
+         #,@(for/list ([internal-name (syntax->list #'(init.name member.name ...))]
+                       [external-name (syntax->list #'(init.name member.external-name ...))])
+             (define getter (format-id stx "~a-~a" #'datatype-name external-name))
              #`(begin
-                 (define (#,member-name x) (#,getter x))
-                 (provide #,getter)
-                 (provide #,member-name)))
+                 (define (#,internal-name x) (#,getter x))
+                 (provide #,getter)))
          (define (new-symbolic-name)
            (datatype-name init.ctor member.ctor ...))
          (provide new-symbolic-name)
@@ -93,25 +110,26 @@
     ; case 1: when module is purely combinatorial
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         (~datum true))
+     #:with internal-copy-name (format-id stx "internal-copy-~a" #'type)
      #'(begin
          (define (name state)
-           (struct-copy type state))
+           (internal-copy-name type state))
          (provide name))]
     ; case 2: when state has a single field
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum =) e (field:id (~datum next_state))))
-     #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'type)
+     #:with internal-copy-name (format-id stx "internal-copy-~a" #'type)
      #`(begin
          (define (name state)
-           (struct-copy type state [field e]))
+           (internal-copy-name type state [field e]))
          (provide name))]
     ; case 3: when state has multiple fields
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum and) ((~datum =) e (field:id (~datum next_state))) ...))
-     #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'type)
+     #:with internal-copy-name (format-id stx "internal-copy-~a" #'type)
      #`(begin
          (define (name state)
-           (struct-copy type state [field e] ...))
+           (internal-copy-name type state [field e] ...))
          (provide name))]))
 (provide define-fun)
 

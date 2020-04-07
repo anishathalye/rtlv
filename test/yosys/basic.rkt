@@ -21,7 +21,7 @@
   (define s0 (struct-copy
               counter_s
               (new-symbolic-counter_s)
-              [counter#3 #f]))
+              [nrst #t]))
   (define s1 (counter_t s0))
   (define model
     (verify
