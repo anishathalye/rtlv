@@ -67,7 +67,6 @@
      #:with internal-copy-name (format-id stx "internal-copy-~a" #'datatype-name)
      #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'datatype-name)
      #:with new-zeroed-name (format-id stx "new-zeroed-~a" #'datatype-name)
-     #:with name-assoc (format-id stx "~a-name-assoc" #'datatype-name)
      #:with /... (quote-syntax ...)
      #`(begin
          (struct datatype-name (init.name member.external-name ...)
