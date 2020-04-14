@@ -108,9 +108,9 @@
 (define (add-define-fun-hook hook)
   (set! define-fun-hooks (cons hook define-fun-hooks)))
 
-(define (trigger-hooks fn)
+(define (trigger-hooks name fn)
   (racket:for ([hook define-fun-hooks])
-    (hook fn))
+    (hook name fn))
   (set! define-fun-hooks '()))
 
 (define-syntax (define-fun stx)
@@ -121,7 +121,7 @@
          (define/memoize (name input)
            body)
          (provide name)
-         (trigger-hooks name))]
+         (trigger-hooks 'name name))]
     ; transition function: treated specially
     ; case 1: when module is purely combinatorial
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
@@ -131,7 +131,7 @@
          (define (name state)
            (internal-copy-name type state))
          (provide name)
-         (trigger-hooks name))]
+         (trigger-hooks 'name name))]
     ; case 2: when state has a single field
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum =) e (field:id (~datum next_state))))
@@ -140,7 +140,7 @@
          (define (name state)
            (internal-copy-name type state [field e]))
          (provide name)
-         (trigger-hooks name))]
+         (trigger-hooks 'name name))]
     ; case 3: when state has multiple fields
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum and) ((~datum =) e (field:id (~datum next_state))) ...))
@@ -149,7 +149,7 @@
          (define (name state)
            (internal-copy-name type state [field e] ...))
          (provide name)
-         (trigger-hooks name))]))
+         (trigger-hooks 'name name))]))
 (provide define-fun)
 
 (define (extractor i j)
@@ -220,7 +220,7 @@
 (provide yosys-smt2-clock)
 
 (define-simple-macro (make-appender lst)
-  (lambda (i) (set! lst (cons i lst))))
+  (lambda (name fn) (set! lst (cons (list name fn) lst))))
 
 (define-syntax (yosys-smt2-input stx)
   (syntax-parse stx
