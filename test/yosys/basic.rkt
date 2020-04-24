@@ -35,6 +35,6 @@
 (test-case "inputs/outputs/registers"
   (check-equal? (length inputs) 3)
   (check-equal? (length outputs) 1)
-  (check-eq? (first outputs) |counter_n count|)
+  (check-equal? (first outputs) (list '|counter_n count| |counter_n count|))
   (check-equal? (length registers) 1)
-  (check-eq? (first registers) |counter_n count|))
+  (check-equal? (first registers) (list '|counter_n count| |counter_n count|)))
