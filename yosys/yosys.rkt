@@ -7,6 +7,7 @@
 ; we need to be careful of what we import for runtime, because
 ; whatever we use needs to be compatible with Rosette
 (require
+ rosutil
  (prefix-in
   racket:
   (only-in racket/base
@@ -144,9 +145,6 @@
          (provide name)
          (trigger-hooks 'name name))]))
 (provide define-fun)
-
-(define-simple-macro (fresh-symbolic name:id type:expr)
-  (let () (define-symbolic* name type) name))
 
 (define (extractor i j)
   (lambda (x) (extract i j x)))
