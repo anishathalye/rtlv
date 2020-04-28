@@ -34,7 +34,7 @@
          (r:solve
           (r:assert
            (r:and (invariant-fn state)
-                (r:not (r:equal? symbolic-field-value concrete-field-value)))))))
+                  (r:not (r:equal? symbolic-field-value concrete-field-value)))))))
       (if
        must-be-same
        ; in this case, we know it must always be equal to the concrete value we found
@@ -130,26 +130,35 @@
                ; note: we get (symbolics sn) rather than just of states, so that we can get a fully concrete state if we want
                (define symvars (r:symbolics sn))
                (define complete-soln (r:complete-solution (r:solve #t) symvars))
-               (define states-concrete (r:evaluate states complete-soln))
-               (define sn-concrete (r:evaluate sn complete-soln))
-               (define-values (model query-time)
-                 (time (r:solve (r:assert (r:and
-                                           (r:not (r:equal? states states-concrete))
-                                           (r:equal? (statics sn) (statics sn-concrete)))))))
-               (printf "  smt query returned in ~ams~n" (~r query-time #:precision 1))
-               (when debug
-                 (debug cycle sn model))
                (cond
-                 [(r:unknown? model)
-                  (displayln "warning: determinism check returned (unknown), treating as SAT and continuing")]
-                 [(r:unsat? model)
-                  (displayln "  -> unsat!")]
+                 [(r:unknown? complete-soln)
+                  ; this isn't a fatal error; maybe things could become easier to solve in a future cycle
+                  ; but it is unlikely
+                  (displayln "warning: solver timed out while trying to find a single concrete solution, which might be a performance bug; treating as SAT and continuing")
+                  #f]
+                 [(r:unsat? complete-soln)
+                  (error "state has no concrete solution: bug in input?")]
                  [else
-                  (displayln "  -> sat!")
-                  (when (not (eq? print-style 'none))
-                    (define states-concrete-2 (r:evaluate states (r:complete-solution model symvars)))
-                    (show-differences states-concrete states-concrete-2 #t (eq? print-style 'names)))])
-               model)
+                  (define states-concrete (r:evaluate states complete-soln))
+                  (define sn-concrete (r:evaluate sn complete-soln))
+                  (define-values (model query-time)
+                    (time (r:solve (r:assert (r:and
+                                              (r:not (r:equal? states states-concrete))
+                                              (r:equal? (statics sn) (statics sn-concrete)))))))
+                  (printf "  smt query returned in ~ams~n" (~r query-time #:precision 1))
+                  (when debug
+                    (debug cycle sn model))
+                  (cond
+                    [(r:unknown? model)
+                     (displayln "warning: determinism check returned (unknown), treating as SAT and continuing")]
+                    [(r:unsat? model)
+                     (displayln "  -> unsat!")]
+                    [else
+                     (displayln "  -> sat!")
+                     (when (not (eq? print-style 'none))
+                       (define states-concrete-2 (r:evaluate states (r:complete-solution model symvars)))
+                       (show-differences states-concrete states-concrete-2 #t (eq? print-style 'names)))])
+                  model]))
              #f))
        #:break (r:unsat? res)
        (define-values (sn+1 step-time) (time (step sn)))
