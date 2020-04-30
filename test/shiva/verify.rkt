@@ -29,7 +29,7 @@
   (list->vector
    (for/list
        ([i mem])
-     (fresh-symbolic name (bitvector (bitvector-size (type-of i)))))))
+     (fresh-symbolic name (type-of i)))))
 
 (define (overapproximate s cycle)
   (if (equal? cycle 4)
