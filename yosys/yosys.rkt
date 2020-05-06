@@ -178,6 +178,20 @@
   (foldl xor #f args))
 (provide (rename-out [varargs-xor xor]))
 
+(define-syntax (tree-and stx)
+  (syntax-parse stx
+    [(_) #'#t]
+    [(_ arg) #'arg]
+    [(_ arg0 arg1) #'(and arg0 arg1)]
+    [(_ arg ...)
+     (let* ([elems (syntax->list #'(arg ...))]
+            [mid (quotient (length elems) 2)])
+       (let-values ([(left right) (split-at elems mid)])
+         #`(and
+            (tree-and #,@left)
+            (tree-and #,@right))))]))
+(provide (rename-out [tree-and and]))
+
 ; this appears at the top of the extraction, so we can put global
 ; top-level definitions here
 (define-syntax (yosys-smt2-stdt stx)
