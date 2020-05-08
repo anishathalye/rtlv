@@ -19,10 +19,10 @@
     (r:solve (r:assert (invariant-fn state))))
   (when (not (r:sat? model-example))
     (error 'with-invariants "invariant unsatisfiable"))
-  (define state-example
-    (r:evaluate
-     state
-     (r:complete-solution model-example (r:symbolics state))))
+  (define state-example (r:evaluate state model-example))
+  ; state-example may still have symbolics in it (we didn't call complete-solution).
+  ; this is an optimization: if a field in there is a term, we can skip it
+  ; without an expensive call to the solver
   (define symbolic-state-vector (struct->vector state))
   (define concrete-state-vector (struct->vector state-example))
   (define maybe-concretized-fields
@@ -30,11 +30,12 @@
       (define symbolic-field-value (vector-ref symbolic-state-vector i))
       (define concrete-field-value (vector-ref concrete-state-vector i))
       (define must-be-same
-        (r:unsat?
-         (r:solve
-          (r:assert
-           (r:and (invariant-fn state)
-                  (r:not (r:equal? symbolic-field-value concrete-field-value)))))))
+        (and (not (r:term? concrete-field-value))
+             (r:unsat?
+              (r:solve
+               (r:assert
+                (r:and (invariant-fn state)
+                       (r:not (r:equal? symbolic-field-value concrete-field-value))))))))
       (if
        must-be-same
        ; in this case, we know it must always be equal to the concrete value we found
@@ -42,6 +43,7 @@
        ; but if not, keep the old symbolic value
        symbolic-field-value)))
   (apply struct-constructor maybe-concretized-fields))
+(provide with-invariants)
 
 (module+ test
   (require rackunit)
