@@ -13,7 +13,7 @@
 ;
 ; it won't work, for example, for a large memory where a part of it
 ; is a constant, but the rest is undefined at initialization
-(define (with-invariants struct-constructor symbolic-state invariant-fn)
+(define (with-invariants struct-constructor symbolic-state invariant-fn [fallback #f])
   (define state symbolic-state)
   (define model-example
     (r:solve (r:assert (invariant-fn state))))
@@ -25,6 +25,7 @@
   ; without an expensive call to the solver
   (define symbolic-state-vector (struct->vector state))
   (define concrete-state-vector (struct->vector state-example))
+  (define fallback-vector (if fallback (struct->vector fallback) #f))
   (define maybe-concretized-fields
     (for/list ([i (in-range 1 (vector-length symbolic-state-vector))])
       (define symbolic-field-value (vector-ref symbolic-state-vector i))
@@ -41,7 +42,9 @@
        ; in this case, we know it must always be equal to the concrete value we found
        concrete-field-value
        ; but if not, keep the old symbolic value
-       symbolic-field-value)))
+       (if fallback-vector
+           (vector-ref fallback-vector i)
+           symbolic-field-value))))
   (apply struct-constructor maybe-concretized-fields))
 (provide with-invariants)
 
