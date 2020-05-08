@@ -21,7 +21,7 @@
     (error 'with-invariants "invariant unsatisfiable"))
   (define state-example (r:evaluate state model-example))
   ; state-example may still have symbolics in it (we didn't call complete-solution).
-  ; this is an optimization: if a field in there is a term, we can skip it
+  ; this is an optimization: if a field in there is not concrete, we can skip it
   ; without an expensive call to the solver
   (define symbolic-state-vector (struct->vector state))
   (define concrete-state-vector (struct->vector state-example))
@@ -31,7 +31,7 @@
       (define symbolic-field-value (vector-ref symbolic-state-vector i))
       (define concrete-field-value (vector-ref concrete-state-vector i))
       (define must-be-same
-        (and (not (r:term? concrete-field-value))
+        (and (empty? (r:symbolics concrete-field-value))
              (r:unsat?
               (r:solve
                (r:assert
