@@ -7,6 +7,7 @@
 ; we need to be careful of what we import for runtime, because
 ; whatever we use needs to be compatible with Rosette
 (require
+ "memoize.rkt"
  rosutil
  (prefix-in
   racket:
@@ -14,8 +15,7 @@
            in-range
            for/list
            struct-copy
-           for))
-  memo)
+           for)))
 
 ; XXX this seems inefficient
 (define (vector-update vec pos v)
@@ -112,7 +112,7 @@
     ; regular case
     [(_ name:id ((input:id input-type)) return-type body:expr)
      #'(begin
-         (define/memoize (name input)
+         (define/memoize1 (name input)
            body)
          (provide name)
          (trigger-hooks 'name name))]
@@ -123,7 +123,8 @@
      #:with internal-copy-name (format-id stx "internal-copy-~a" #'type)
      #'(begin
          (define (name state)
-           (internal-copy-name type state))
+           (new-memoization-context
+            (internal-copy-name type state)))
          (provide name)
          (trigger-hooks 'name name))]
     ; case 2: when state has a single field
@@ -132,7 +133,8 @@
      #:with internal-copy-name (format-id stx "internal-copy-~a" #'type)
      #`(begin
          (define (name state)
-           (internal-copy-name type state [field e]))
+           (new-memoization-context
+            (internal-copy-name type state [field e])))
          (provide name)
          (trigger-hooks 'name name))]
     ; case 3: when state has multiple fields
@@ -141,7 +143,8 @@
      #:with internal-copy-name (format-id stx "internal-copy-~a" #'type)
      #`(begin
          (define (name state)
-           (internal-copy-name type state [field e] ...))
+           (new-memoization-context
+            (internal-copy-name type state [field e] ...)))
          (provide name)
          (trigger-hooks 'name name))]))
 (provide define-fun)
