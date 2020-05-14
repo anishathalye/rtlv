@@ -156,7 +156,7 @@
   (extractor i j))
 (provide _)
 
-(define (ite c t f)
+(define-simple-macro (ite c t f)
   (if c t f))
 (provide ite)
 
