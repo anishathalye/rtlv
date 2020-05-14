@@ -161,7 +161,7 @@
 (provide ite)
 
 (define (distinct x y)
-  (not (equal? x y)))
+  (not (bveq x y)))
 (provide distinct)
 
 (define (select a i)
@@ -172,8 +172,19 @@
   (vector-update a (bitvector->natural i) v))
 (provide store)
 
-(define (= x y)
-  (equal? x y))
+; we could implement this with `equal?`, but that is slow. Yosys uses `=` mostly for
+; bitvectors, and only in a few cases for booleans. The boolean cases are:
+;
+; - in the invariant function, when comparing a boolean with the literal 'true' or 'false'
+; - in the transition function (this is a macro anyways, that treats the '=' specially)
+(define-syntax (= stx)
+  (syntax-parse stx
+    [(_ x:expr (~datum true))
+     #'(<=> x true)]
+    [(_ x:expr (~datum false))
+     #'(<=> x false)]
+    [(_ x:expr y:expr)
+     #'(bveq x y)]))
 (provide =)
 
 ; to match SMTLIB's xor, which can take multiple arguments
