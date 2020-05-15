@@ -8,6 +8,7 @@
 ; whatever we use needs to be compatible with Rosette
 (require
  "memoize.rkt"
+ "parameters.rkt"
  rosutil
  (prefix-in
   racket:
@@ -16,12 +17,6 @@
            for/list
            struct-copy
            for)))
-
-; XXX this seems inefficient
-(define (vector-update vec pos v)
-  (define vec* (apply vector (vector->list vec)))
-  (vector-set! vec* pos v)
-  vec*)
 
 (begin-for-syntax
   (define-splicing-syntax-class yosys-type
@@ -34,12 +29,20 @@
              #:with zero-ctor #'(bv 0 num))
     (pattern ((~datum Array) ((~datum _) (~datum BitVec) depth:nat) ((~datum _) (~datum BitVec) width:nat))
              #:attr ctor (lambda (name-stx)
-                           #`(list->vector
-                              (racket:for/list ([i (racket:in-range (expt 2 depth))])
-                                (fresh-symbolic #,name-stx (bitvector width)))))
-             #:with zero-ctor #'(list->vector
-                                 (racket:for/list ([i (racket:in-range (expt 2 depth))])
-                                   (bv 0 width)))))
+                           #`(if (array-representation-vector)
+                                 ; vector representation
+                                 (list->vector
+                                  (racket:for/list ([i (racket:in-range (expt 2 depth))])
+                                                   (fresh-symbolic #,name-stx (bitvector width))))
+                                 ; UF representation
+                                 (fresh-symbolic #,name-stx (~> (bitvector depth) (bitvector width)))))
+             #:with zero-ctor #'(if (array-representation-vector)
+                                    ; vector representation
+                                    (list->vector
+                                     (racket:for/list ([i (racket:in-range (expt 2 depth))])
+                                                      (bv 0 width)))
+                                    ; UF representation
+                                    (lambda (addr) (bv 0 width)))))
 
   (define-splicing-syntax-class yosys-member
     #:attributes (external-name name ctor zero-ctor)
@@ -164,12 +167,30 @@
   (not (bveq x y)))
 (provide distinct)
 
-(define (select a i)
-  (vector-ref a (bitvector->natural i)))
+(define-simple-macro (select a i)
+  ; it's a bit unfortunate that we pay a run-time penalty here for the branch,
+  ; but hopefully it is not too large
+  (if (array-representation-vector)
+      ; vector representation
+      (vector-ref a (bitvector->natural i))
+      ; UF representation
+      (a i)))
 (provide select)
 
+; XXX this seems inefficient
+(define (vector-update vec pos v)
+  (define vec* (apply vector (vector->list vec)))
+  (vector-set! vec* pos v)
+  vec*)
+
 (define (store a i v)
-  (vector-update a (bitvector->natural i) v))
+  ; it's a bit unfortunate that we pay a run-time penalty here for the branch,
+  ; but hopefully it is not too large
+  (if (array-representation-vector)
+      ; vector representation
+      (vector-update a (bitvector->natural i) v)
+      ; UF representation
+      (lambda (i*) (if (bveq i i*) v (a i*)))))
 (provide store)
 
 ; we could implement this with `equal?`, but that is slow. Yosys uses `=` mostly for
