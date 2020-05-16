@@ -1,0 +1,29 @@
+language: c
+dist: xenial
+
+env:
+  global:
+    - RACKET_DIR=~/racket
+  matrix:
+    - RACKET_VERSION=7.3
+    - RACKET_VERSION=RELEASE
+    - RACKET_VERSION=RELEASECS
+    - RACKET_VERSION=HEAD
+
+matrix:
+  allow_failures:
+    - env: RACKET_VERSION=HEAD
+    - env: RACKET_VERSION=RELEASECS
+  fast_finish: true
+
+before_install:
+  - git clone https://github.com/greghendershott/travis-racket.git
+  - cat travis-racket/install-racket.sh | bash # pipe to bash not sh!
+  - export PATH="${RACKET_DIR}/bin:${PATH}"
+  - racket --version
+
+install:
+  - raco pkg install --auto
+
+script:
+  - raco test .
