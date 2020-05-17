@@ -118,7 +118,6 @@
          #:print-style [print-style 'full]
          #:try-verify-after [try-verify-after 0]
          #:debug [debug #f])
-  (define tick (current-inexact-milliseconds))
   (define s0-with-inv (with-invariants struct-constructor (symbolic-constructor) invariant))
   (when (not (verify-statics s0-with-inv step statics))
     (error 'verify-deterministic-start "failed to prove statics"))

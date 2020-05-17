@@ -14,7 +14,6 @@
   racket:
   (only-in racket/base
            in-range
-           for/list
            struct-copy
            for)))
 
@@ -32,15 +31,15 @@
                            #`(if (array-representation-vector)
                                  ; vector representation
                                  (list->vector
-                                  (racket:for/list ([i (racket:in-range (expt 2 depth))])
-                                                   (fresh-symbolic #,name-stx (bitvector width))))
+                                  (build-list (expt 2 depth)
+                                              (lambda (_)
+                                                (fresh-symbolic #,name-stx (bitvector width)))))
                                  ; UF representation
                                  (fresh-symbolic #,name-stx (~> (bitvector depth) (bitvector width)))))
              #:with zero-ctor #'(if (array-representation-vector)
                                     ; vector representation
                                     (list->vector
-                                     (racket:for/list ([i (racket:in-range (expt 2 depth))])
-                                                      (bv 0 width)))
+                                     (replicate (expt 2 depth) (bv 0 width)))
                                     ; UF representation
                                     (lambda (addr) (bv 0 width)))))
 
@@ -107,7 +106,7 @@
 
 (define (trigger-hooks name fn)
   (racket:for ([hook define-fun-hooks])
-    (hook name fn))
+              (hook name fn))
   (set! define-fun-hooks '()))
 
 (define-syntax (define-fun stx)
@@ -167,25 +166,34 @@
   (not (bveq x y)))
 (provide distinct)
 
-(define-simple-macro (select a i)
-  ; it's a bit unfortunate that we pay a run-time penalty here for the branch,
-  ; but hopefully it is not too large
+(define (select a i)
   (if (array-representation-vector)
       ; vector representation
-      (vector-ref a (bitvector->natural i))
+      (let ([symbolic-index (not (concrete-head? i))]
+            [thresh (overapproximate-symbolic-load-threshold)])
+        (if (and symbolic-index thresh (>= (vector-length a) thresh))
+            ; overapproximate, return fresh symbolic value
+            (fresh-symbolic overapproximated-value (type-of (vector-ref a 0)))
+            ; do the indexing into the vector
+            (vector-ref a (bitvector->natural i))))
       ; UF representation
       (a i)))
 (provide select)
 
-; XXX this seems inefficient
 (define (vector-update vec pos v)
-  (define vec* (apply vector (vector->list vec)))
-  (vector-set! vec* pos v)
-  vec*)
+  (define symbolic-index (not (concrete-head? pos)))
+  (define thresh (overapproximate-symbolic-store-threshold))
+  (if (and symbolic-index thresh (>= (vector-length vec) thresh))
+      (let ([type (type-of (vector-ref vec 0))])
+        (list->vector
+         (build-list (vector-length vec)
+                     (lambda (_) (fresh-symbolic overapproximation type)))))
+      ; XXX this seems inefficient
+      (let ([vec-copy (apply vector (vector->list vec))])
+        (vector-set! vec-copy pos v)
+        vec-copy)))
 
 (define (store a i v)
-  ; it's a bit unfortunate that we pay a run-time penalty here for the branch,
-  ; but hopefully it is not too large
   (if (array-representation-vector)
       ; vector representation
       (vector-update a (bitvector->natural i) v)
@@ -289,6 +297,6 @@
 (define-syntax (yosys-smt2-memory stx)
   (syntax-parse stx
     [(_ name:id bits:nat width:nat read-ports:nat write-ports:nat 'sync:id)
-    #:with memories (format-id stx "memories")
+     #:with memories (format-id stx "memories")
      #'(add-define-fun-hook (make-appender memories))]))
 (provide yosys-smt2-memory)

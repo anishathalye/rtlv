@@ -1,53 +1,55 @@
 #lang rosette/safe
 
-(require "verilog/picosoc.rkt"
-         (only-in racket struct-copy for/list string-contains?)
+(require "verilog/soc.rkt"
+         (only-in racket struct-copy string-contains?)
          (only-in racket/port with-output-to-string)
          shiva
          rosutil
+         yosys/parameters
          syntax/parse/define
          rackunit)
 
+(overapproximate-symbolic-load-threshold 64)
+(overapproximate-symbolic-store-threshold 64)
+
 (define (input-setter s)
-  (struct-copy picosoc_s s
+  (struct-copy soc_s s
                [resetn #t]
-               [button (bv 0 5)]
+               [gpio_pin_in (bv 0 8)]
                [uart_rx (bv #b1111 4)]))
 
 (define (init-input-setter s)
-  (struct-copy picosoc_s s
+  (struct-copy soc_s s
                [resetn #f]
-               [button (bv 0 5)]
+               [gpio_pin_in (bv 0 8)]
                [uart_rx (bv #b1111 4)]))
 
 (define (statics s)
-  ; for some reason, the picosoc has a physical register for x0/zero,
+  ; for some reason, the picorv32 has a physical register for x0/zero,
   ; cpuregs[0], whose value can never change in practice
-  (vector-ref (|picosoc_m cpu.cpuregs| s) 0))
+  (vector-ref (|soc_m cpu.cpuregs| s) 0))
 
 (define-simple-macro (fresh-memory-like name mem)
-  (list->vector
-   (for/list
-       ([i mem])
-     (fresh-symbolic name (type-of i)))))
+  (let ([elem-type (type-of (vector-ref mem 0))])
+    (list->vector
+     (build-list (vector-length mem)
+                 (lambda (_) (fresh-symbolic name elem-type))))))
 
 (define (overapproximate s cycle)
   (if (equal? cycle 4)
       ; overapproximate RAM/cpuregs behavior to avoid a big ite that doesn't matter
-      (struct-copy picosoc_s s
-                   [ram.ram (fresh-memory-like ram (|picosoc_m ram.ram| s))]
-                   [cpu.cpuregs (fresh-memory-like cpuregs (|picosoc_m cpu.cpuregs| s))])
+      (struct-copy soc_s s [cpu.cpuregs (fresh-memory-like cpuregs (|soc_m cpu.cpuregs| s))])
       #f))
 
-(test-case "verify-deterministic-start: picosoc"
+(test-case "verify-deterministic-start: soc"
   (define output
     (with-output-to-string
       (lambda ()
         (verify-deterministic-start
-         picosoc_s
-         new-symbolic-picosoc_s
-         #:invariant picosoc_i
-         #:step picosoc_t
+         soc_s
+         new-symbolic-soc_s
+         #:invariant soc_i
+         #:step soc_t
          #:init-input-setter init-input-setter
          #:input-setter input-setter
          #:state-getters (append registers memories)
@@ -56,6 +58,6 @@
          #:print-style 'names
          #:try-verify-after 450))))
   (check-true (string-contains? output "-> sat!"))
-  (check-true (string-contains? output "cycle 473"))
+  (check-true (string-contains? output "cycle 472"))
   (check-true (string-contains? output "-> unsat!"))
-  (check-false (string-contains? output "cycle 474")))
+  (check-false (string-contains? output "cycle 473")))
