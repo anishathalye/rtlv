@@ -105,6 +105,9 @@
 ; print-style: 'full, 'names, or 'none
 ; try-verify-after: don't invoke SMT solver until given step
 ; debug: integer?, module?, model? -> (void), called at every step with cycle, state, and model
+;
+; returns #f if verifying deterministic start failed after hitting the limit on number of cycles
+; otherwise returns the number of cycles it took to verify (a truthy value)
 (define (verify-deterministic-start
          struct-constructor
          symbolic-constructor
@@ -117,12 +120,14 @@
          #:overapproximate [overapproximate #f]
          #:print-style [print-style 'full]
          #:try-verify-after [try-verify-after 0]
+         #:limit [limit #f]
          #:debug [debug #f])
   (define s0-with-inv (with-invariants struct-constructor (symbolic-constructor) invariant))
   (when (not (verify-statics s0-with-inv step statics))
     (error 'verify-deterministic-start "failed to prove statics"))
   (define s0 (init-input-setter s0-with-inv))
   (define sn s0)
+  (define verified #f)
   (define-values (ignored total-time)
     (time
      (for ([cycle (in-naturals)])
@@ -164,13 +169,19 @@
                        (show-differences states-concrete states-concrete-2 #t (eq? print-style 'names)))])
                   model]))
              #f))
-       #:break (r:unsat? res)
+       (when (r:unsat? res)
+         (set! verified cycle))
+       #:break (or verified (and limit (>= cycle limit)))
        (define-values (sn+1 step-time) (time (step sn)))
        (printf "  stepped in ~ams~n" (~r step-time #:precision 1))
        (set! sn
              (let* ([with-inputs (input-setter sn+1)]
                     [overapproximation (and overapproximate (overapproximate with-inputs cycle))])
                (or overapproximation with-inputs))))))
-  (printf "finished in ~as~n" (~r (/ total-time 1000) #:precision 1)))
+  (define t (~r (/ total-time 1000) #:precision 1))
+  (if verified
+      (printf "finished in ~as~n" t)
+      (printf "failed to prove in ~a cycles (took ~as)~n" limit t))
+  verified)
 
 (provide verify-deterministic-start)

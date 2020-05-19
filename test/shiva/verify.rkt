@@ -41,22 +41,48 @@
       (struct-copy soc_s s [cpu.cpuregs (fresh-memory-like cpuregs (|soc_m cpu.cpuregs| s))])
       #f))
 
-(test-case "verify-deterministic-start: soc"
+(test-case "verify-deterministic-start: limit"
+  (define ret #f)
   (define output
     (with-output-to-string
       (lambda ()
-        (verify-deterministic-start
-         soc_s
-         new-symbolic-soc_s
-         #:invariant soc_i
-         #:step soc_t
-         #:init-input-setter init-input-setter
-         #:input-setter input-setter
-         #:state-getters (append registers memories)
-         #:statics statics
-         #:overapproximate overapproximate
-         #:print-style 'names
-         #:try-verify-after 450))))
+        (set!
+         ret
+         (verify-deterministic-start
+          soc_s
+          new-symbolic-soc_s
+          #:invariant soc_i
+          #:step soc_t
+          #:init-input-setter init-input-setter
+          #:input-setter input-setter
+          #:state-getters (append registers memories)
+          #:statics statics
+          #:overapproximate overapproximate
+          #:print-style 'names
+          #:try-verify-after 450
+          #:limit 450)))))
+  (check-false ret))
+
+(test-case "verify-deterministic-start: soc"
+  (define ncycles #f)
+  (define output
+    (with-output-to-string
+      (lambda ()
+        (set!
+         ncycles
+         (verify-deterministic-start
+          soc_s
+          new-symbolic-soc_s
+          #:invariant soc_i
+          #:step soc_t
+          #:init-input-setter init-input-setter
+          #:input-setter input-setter
+          #:state-getters (append registers memories)
+          #:statics statics
+          #:overapproximate overapproximate
+          #:print-style 'names
+          #:try-verify-after 450)))))
+  (check-equal? ncycles 472)
   (check-true (string-contains? output "-> sat!"))
   (check-true (string-contains? output "cycle 472"))
   (check-true (string-contains? output "-> unsat!"))
