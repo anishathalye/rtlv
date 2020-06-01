@@ -1,6 +1,8 @@
 #lang racket
 
-(require (prefix-in r: rosette))
+(require (prefix-in r: rosette)
+         (for-syntax syntax/parse
+                     racket/syntax))
 
 (define (concretize term [error-on-failure #f])
   (let/ec return
@@ -20,3 +22,16 @@
       [(not error-on-failure) term]
       [else (error 'concretize "failed to concretize term")])))
 (provide concretize)
+
+(define-syntax (concretize-fields stx)
+  (syntax-parse stx
+    [(_ struct-id:id struct-elem:expr (field-name:id ...))
+     #:with (getter-name ...) (for/list ([field-name (syntax->list #'(field-name ...))])
+                                (format-id stx "~a-~a" (syntax-e #'struct-id) (syntax-e field-name)))
+     #'(begin
+         (define struct-v struct-elem)
+         (struct-copy
+          struct-id
+          struct-v
+          [field-name (concretize (getter-name struct-v))] ...))]))
+(provide concretize-fields)
