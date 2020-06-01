@@ -2,7 +2,8 @@
 
 (require rackunit
          "verilog/counter.rkt"
-         (only-in racket/base struct-copy))
+         "verilog/print-test.rkt"
+         (only-in racket struct-copy string-append))
 
 (test-case "basic verification: when enable and reset are not set, value doesn't change"
   (define s0 (new-symbolic-counter_s))
@@ -38,3 +39,31 @@
   (check-equal? (first outputs) (list '|counter_n count| |counter_n count|))
   (check-equal? (length registers) 1)
   (check-equal? (first registers) (list '|counter_n count| |counter_n count|)))
+
+(test-case "display/write"
+  (define s0 (new-zeroed-print_test_s))
+  (define expected
+    (apply string-append
+           '("#(struct:print_test_s"
+             " #f"
+             " #f"
+             " (bv #x00 8)"
+             " #((bv #x00000000 32) (bv #x00000000 32) (bv #x00000000 32) (bv #x00000000 32))"
+             ")")))
+  (check-equal? (format "~a" s0) expected) ; display
+  (check-equal? (format "~s" s0) expected)) ; write
+
+(test-case "print"
+  (define s0 (new-zeroed-print_test_s))
+  (check-equal? (format "~v" s0) #<<EOS
+print_test_s {
+  clk: #f
+  count: (bv #x00 8)
+  ram:
+    0: (bv #x00000000 32)
+    1: (bv #x00000000 32)
+    2: (bv #x00000000 32)
+    3: (bv #x00000000 32)
+}
+EOS
+                ))

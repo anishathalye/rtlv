@@ -10,23 +10,21 @@
  "memoize.rkt"
  "parameters.rkt"
  rosutil
- (prefix-in
-  racket:
-  (only-in racket/base
-           in-range
-           struct-copy
-           for)))
+ (prefix-in racket: racket))
 
 (begin-for-syntax
   (define-splicing-syntax-class yosys-type
-    #:attributes (ctor zero-ctor)
+    #:attributes (show ctor zero-ctor)
     (pattern (~datum Bool)
+             #:with show #'show-boolean
              #:attr ctor (lambda (name-stx) #`(fresh-symbolic #,name-stx boolean?))
              #:with zero-ctor #'#f)
     (pattern ((~datum _) (~datum BitVec) num:nat)
+             #:with show #'show-bitvector
              #:attr ctor (lambda (name-stx) #`(fresh-symbolic #,name-stx (bitvector num)))
              #:with zero-ctor #'(bv 0 num))
     (pattern ((~datum Array) ((~datum _) (~datum BitVec) depth:nat) ((~datum _) (~datum BitVec) width:nat))
+             #:with show #'show-array
              #:attr ctor (lambda (name-stx)
                            #`(if (array-representation-vector)
                                  ; vector representation
@@ -44,8 +42,9 @@
                                     (lambda (addr) (bv 0 width)))))
 
   (define-splicing-syntax-class yosys-member
-    #:attributes (external-name name ctor zero-ctor)
+    #:attributes (external-name name show ctor zero-ctor)
     (pattern (~seq (name:id type:yosys-type) external-name:id)
+             #:with show (attribute type.show)
              #:with ctor ((attribute type.ctor) #'external-name)
              #:with zero-ctor (attribute type.zero-ctor)))
 
@@ -63,10 +62,33 @@
      #:with internal-copy-name (format-id stx "internal-copy-~a" #'datatype-name)
      #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'datatype-name)
      #:with new-zeroed-name (format-id stx "new-zeroed-~a" #'datatype-name)
+     #:with init-getter (format-id stx "~a-~a" #'datatype-name #'init.name)
+     #:with (getter ...) (for/list ([external-name (syntax->list #'(member.external-name ...))])
+                           (format-id stx "~a-~a" #'datatype-name external-name))
      #:with /... (quote-syntax ...)
      #`(begin
          (struct datatype-name (init.name member.external-name ...)
+           #:methods gen:custom-write
+           [(define (write-proc x port mode) (show x port mode))]
            #:transparent)
+         (define (show x port mode)
+           (cond
+             [(boolean? mode)
+              ; write or display
+              (fprintf port "#(struct:~a " 'datatype-name)
+              (show-boolean (init-getter x) port mode)
+              (begin
+                (fprintf port " ")
+                (member.show (getter x) port mode)) ...
+              (fprintf port ")")]
+             [else
+              ; print something more human-readable
+              (fprintf port "~a {~n" 'datatype-name)
+              (begin
+                (fprintf port "  ~a:" 'member.external-name)
+                (member.show (getter x) port mode)
+                (fprintf port "\n")) ...
+              (fprintf port "}")]))
          (provide datatype-name)
          ; like struct-copy, but uses the internal names instead of external names
          (begin-for-syntax
@@ -82,15 +104,10 @@
                                [v (syntax->list #'(value /...))])
                       #`(#,(datum->syntax #'datatype-name (hash-ref name-assoc (syntax-e i))) #,v)))
               ]))
-         #,(let ([init-getter (format-id stx "~a-~a" #'datatype-name #'init.name)])
-             #`(define init.name #,init-getter))
-         #,@(for/list ([internal-name (syntax->list #'(member.name ...))]
-                       [external-name (syntax->list #'(member.external-name ...))])
-              (define getter (format-id stx "~a-~a" #'datatype-name external-name))
-              #`(begin
-                  (define #,internal-name #,getter) ; for internal use only, not exported
-                  (define #,external-name #,getter)
-                  (provide #,getter)))
+         (define init.name init-getter)
+         (define member.name getter) ... ; for internal use only, not exported
+         (define member.external-name getter) ...
+         (provide getter) ...
          (define (new-symbolic-name)
            (datatype-name init.ctor member.ctor ...))
          (provide new-symbolic-name)
@@ -300,3 +317,29 @@
      #:with memories (format-id stx "memories")
      #'(add-define-fun-hook (make-appender memories))]))
 (provide yosys-smt2-memory)
+
+(define (show-recur x port mode)
+  (case mode
+    [(#t) (write x port)]
+    [(#f) (display x port)]
+    [else (fprintf port " ") (print x port mode)]))
+
+(define (show-boolean x port mode)
+  (show-recur x port mode))
+
+(define (show-bitvector x port mode)
+  (show-recur x port mode))
+
+(define (show-array x port mode)
+  (case mode
+    [(#t) (write x port)]
+    [(#f) (display x port)]
+    [else
+     (if (array-representation-vector)
+         (racket:for ([e x]
+                      [i (racket:in-naturals)])
+                     (fprintf port "~n    ~a:" i)
+                     (show-bitvector e port mode))
+         (begin
+           (fprintf port " ")
+           (print x port mode)))]))
