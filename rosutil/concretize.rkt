@@ -4,6 +4,15 @@
          (for-syntax syntax/parse
                      racket/syntax))
 
+; Note: these functions are not general-purpose -- it is in general,
+; NOT safe to use them in arbitrary Rosette programs. At best,
+; they might _increase_ the size of terms; at worst, they may produce
+; incorrect results.
+;
+; We use these only in conjunction with yosys, where we have a situation
+; where the assertion store is empty, and there is no mutation everywhere
+; (it's all pure functional code), so I think this is okay.
+
 (define (concretize term [error-on-failure #f])
   (let/ec return
     (define vars (r:symbolics term))
