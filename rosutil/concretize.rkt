@@ -37,7 +37,7 @@
     [(_ struct-id:id struct-elem:expr (field-name:id ...))
      #:with (getter-name ...) (for/list ([field-name (syntax->list #'(field-name ...))])
                                 (format-id stx "~a-~a" (syntax-e #'struct-id) (syntax-e field-name)))
-     #'(begin
+     #'(let ()
          (define struct-v struct-elem)
          (struct-copy
           struct-id
