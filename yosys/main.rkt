@@ -1,6 +1,6 @@
 #lang racket
 
-(require (except-in rosette _ = xor and)
+(require (except-in rosette _ = not and or xor)
          "yosys.rkt")
 
 (provide (all-from-out rosette)

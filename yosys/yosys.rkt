@@ -233,24 +233,33 @@
      #'(bveq x y)]))
 (provide =)
 
+(provide (rename-out [! not]
+                     [&& and]
+                     [|| or]))
+
+(define (<=>* . args)
+  (foldl <=> #t args))
+
 ; to match SMTLIB's xor, which can take multiple arguments
-(define (varargs-xor . args)
-  (foldl xor #f args))
+(define-syntax (varargs-xor stx)
+  (syntax-parse stx
+    [(_ (~seq a0 a1) ...) #'(! (<=>* (~@ a0 a1) ...))]
+    [(_ a (~seq b0 b1) ...) #'(<=>* a (~@ b0 b1) ...)]))
 (provide (rename-out [varargs-xor xor]))
 
-(define-syntax (tree-and stx)
-  (syntax-parse stx
-    [(_) #'#t]
-    [(_ arg) #'arg]
-    [(_ arg0 arg1) #'(and arg0 arg1)]
-    [(_ arg ...)
-     (let* ([elems (syntax->list #'(arg ...))]
-            [mid (quotient (length elems) 2)])
-       (let-values ([(left right) (split-at elems mid)])
-         #`(and
-            (tree-and #,@left)
-            (tree-and #,@right))))]))
-(provide (rename-out [tree-and and]))
+(module+ test
+  (require rackunit)
+  (test-case "xor"
+    (define-symbolic* a b c d e f boolean?)
+    (define (reference-xor x y)
+      (! (<=> x y)))
+    (define (reference-varargs-xor . args)
+      (foldl reference-xor #f args))
+    (check-pred unsat? (verify (assert (equal? (reference-varargs-xor a) (varargs-xor a)))))
+    (check-pred unsat? (verify (assert (equal? (reference-varargs-xor a b) (varargs-xor a b)))))
+    (check-pred unsat? (verify (assert (equal? (reference-varargs-xor a b c) (varargs-xor a b c)))))
+    (check-pred unsat? (verify (assert (equal? (reference-varargs-xor a b c d) (varargs-xor a b c d)))))
+    (check-pred unsat? (verify (assert (equal? (reference-varargs-xor a b c d e) (varargs-xor a b c d e)))))))
 
 ; this appears at the top of the extraction, so we can put global
 ; top-level definitions here
