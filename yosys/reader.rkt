@@ -2,6 +2,10 @@
 
 (require syntax/readerr)
 
+(provide (rename-out
+          [yosys-read read]
+          [yosys-read-syntax read-syntax]))
+
 (define (make-yosys-readtable)
   (make-readtable (current-readtable)
                   #\b 'dispatch-macro read-bitvector
@@ -201,7 +205,3 @@
 (define (yosys-read-syntax src in)
   (parameterize ([current-readtable (make-yosys-toplevel-readtable)])
     (read-syntax src in)))
-
-(provide (rename-out
-          [yosys-read read]
-          [yosys-read-syntax read-syntax]))

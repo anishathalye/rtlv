@@ -3,6 +3,8 @@
 (require (prefix-in r: rosette/safe)
          (for-syntax syntax/parse))
 
+(provide with-invariants verify-deterministic-start)
+
 ; state should be a new state constructed with new-symbolic-{type}
 ;
 ; with-invariants will return that state with the constant fields, as
@@ -46,7 +48,6 @@
            (vector-ref fallback-vector i)
            symbolic-field-value))))
   (apply struct-constructor maybe-concretized-fields))
-(provide with-invariants)
 
 (define (time* thunk)
   (define start (current-inexact-milliseconds))
@@ -168,5 +169,3 @@
       (printf "finished in ~as~n" t)
       (printf "failed to prove in ~a cycles (took ~as)~n" limit t))
   verified)
-
-(provide verify-deterministic-start)

@@ -4,6 +4,8 @@
          (for-syntax syntax/parse
                      racket/syntax))
 
+(provide concretize concretize-fields)
+
 ; Note: these functions are not general-purpose -- it is in general,
 ; NOT safe to use them in arbitrary Rosette programs. At best,
 ; they might _increase_ the size of terms; at worst, they may produce
@@ -30,7 +32,6 @@
       [must-be-same term-concrete]
       [(not error-on-failure) term]
       [else (error 'concretize "failed to concretize term")])))
-(provide concretize)
 
 (define-syntax (concretize-fields stx)
   (syntax-parse stx
@@ -43,4 +44,3 @@
           struct-id
           struct-v
           [field-name (concretize (getter-name struct-v))] ...))]))
-(provide concretize-fields)

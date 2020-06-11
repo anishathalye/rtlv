@@ -2,6 +2,7 @@
 
 (require yosys/memoize
          rackunit)
+
 (test-case "no context"
   (define run-count 0)
   (define/memoize1 (f x)
