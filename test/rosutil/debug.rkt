@@ -74,3 +74,19 @@
   ;    {[(= 1 n) b] [(! (= 1 n)) n]}
   ;    {[(= 2 n) b] [(! (= 2 n)) (bv #b00010 5)]})
   (check-equal? (value-depth v) 4))
+
+(test-case "find-large-terms"
+  (define-symbolic* x (bitvector 8))
+  (define-symbolic* y (bitvector 8))
+  (define-symbolic* z (bitvector 8))
+  (struct module (a b c d))
+
+  (define s (module (bvadd x y) (bvand (bvmul x (bvnot y)) z) z (bv 0 8)))
+  (define state-getters (list
+    (list 'a module-a)
+    (list 'b module-b)
+    (list 'c module-c)
+    (list 'd module-d)))
+
+  (check-equal? (find-large-terms s state-getters) 1) ; b
+  (check-equal? (find-large-terms s state-getters #:threshold 1) 2)) ; a & b

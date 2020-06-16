@@ -1,9 +1,9 @@
 #lang racket
 
-(require (only-in rosette bv? expression constant union)
+(require (only-in rosette bv? expression constant symbolics union)
          (only-in rosette/base/core/term type-deconstruct get-type typed?))
 
-(provide value-size value-depth)
+(provide value-size value-depth find-large-terms)
 
 ; calculate a Rosette value's size
 ;
@@ -78,3 +78,27 @@
     [_
      ; other
      (leaf val)]))
+
+; finds suspicously large terms among the elements of a module's state
+;
+; state-getters has the same construction as the argument of the same name to
+; verify-deterministic-start in rtl/shiva
+;
+; returns number of terms with value-depth >= threshold
+; additionally outputs information about these terms if output? is #t
+(define (find-large-terms state state-getters
+                          #:threshold [threshold 3]
+                          #:output? [output? #f])
+  (define term-depths
+    (for/list ([state-getter state-getters])
+      (let* ([name (first state-getter)]
+             [getter (second state-getter)]
+             [term (getter state)]
+             [depth (value-depth term)]
+             [symvars (symbolics term)])
+        (when (and output? (>= depth threshold))
+          (printf "~a: depth: ~a symbolics: ~a ~n" name depth symvars))
+        depth)))
+  (define large-term-count
+    (length (filter (lambda (n) (>= n threshold)) term-depths)))
+  large-term-count)
