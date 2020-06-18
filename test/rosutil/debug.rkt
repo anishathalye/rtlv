@@ -12,7 +12,8 @@
   (define-symbolic* x y (bitvector 32))
   (check-equal? (value-size x) 1)
   (check-equal? (value-size (bvadd x y)) 3)
-  (check-equal? (value-size (bvmul x (bvadd y (bv 1337 32)))) 5))
+  (check-equal? (value-size (bvmul x (bvadd y (bv 1337 32)))) 5)
+  (check-equal? (value-size (box (bvmul x (bv 3 32)))) 4))
 
 (test-case "value-size: ite"
   (define-symbolic* b boolean?)
@@ -37,3 +38,39 @@
   ;    {[(= 1 n) b] [(! (= 1 n)) n]}
   ;    {[(= 2 n) b] [(! (= 2 n)) (bv #b00010 5)]})
   (check-equal? (value-size v) (+ 1 (* 3 (+ 1 3 1 4 1)))))
+
+(test-case "value-depth: non-symbolic"
+  (check-equal? (value-depth #t) 0)
+  (check-equal? (value-depth '(1 2)) 1)
+  (check-equal? (value-depth '(1 (2 3))) 2))
+
+(test-case "value-depth: expressions"
+  (define-symbolic* x y (bitvector 32))
+  (check-equal? (value-depth x) 0)
+  (check-equal? (value-depth (bvadd x y)) 1)
+  (check-equal? (value-depth (bvmul x (bvadd y (bv 1337 32)))) 2)
+  (check-equal? (value-depth (box (bvmul x (bv 3 32)))) 2))
+
+(test-case "value-depth: ite"
+  (define-symbolic* b boolean?)
+  (define x (if b (list 1 2) (list 2 1)))
+  ; (list (ite b 1 2) (ite b 2 1))
+  (check-equal? (value-depth x) 2))
+
+(test-case "value-depth: symbolic unions"
+  (define-symbolic* b boolean?)
+  (define x (if b (list 1 2) "hi"))
+  ; {[b '(1 2)] [(! b) "hi"]}
+  (check-equal? (value-depth x) 2))
+
+(test-case "value-depth: vectors and mutation"
+  (define-symbolic* b boolean?)
+  (define-symbolic* n integer?)
+  (define v (vector (bv 0 5) n (bv 2 5)))
+  (check-equal? (value-depth v) 1)
+  (vector-set! v n b)
+  ; turns into a vector of unions
+  ; '#({[(= 0 n) b] [(! (= 0 n)) (bv #b00000 5)]}
+  ;    {[(= 1 n) b] [(! (= 1 n)) n]}
+  ;    {[(= 2 n) b] [(! (= 2 n)) (bv #b00010 5)]})
+  (check-equal? (value-depth v) 4))
