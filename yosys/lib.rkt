@@ -2,22 +2,57 @@
 
 (require
  (for-syntax syntax/parse racket/syntax)
+ (prefix-in ! racket)
  syntax/parse/define
  "parameters.rkt"
  rosutil)
 
 (provide
  = distinct _ select store bvxnor
- (rename-out [variadic-xor xor])
+ (rename-out [$xor xor]
+             [$if ite])
  ; exports from Rosette
  #%module-begin #%top-interaction #%app #%datum #%top ; module lang
- (rename-out [if ite]) true false
+ true false ; constants
  (rename-out [! not] [&& and] [|| or]) ; logical
  bv ; types
  bvult bvslt bvule bvsle bvuge bvsge bvugt bvsgt ; comparison
  bvnot bvand bvor bvxor bvshl bvlshr bvashr ; bitwise
  bvneg bvadd bvsub bvmul bvudiv bvsdiv bvurem bvsrem bvsmod ; arithmetic
  concat) ; conversion
+
+(define-simple-macro ($if test-expr then-expr else-expr)
+  (if* test-expr (thunk then-expr) (thunk else-expr)))
+
+; this is a workaround for Rosette's `if` statement producing assertions
+; when it's not necessary. `if` eventually calls `speculate` to evaluate
+; the then and else expressions. before doing so, `speculate` appends to
+; the path condition with `test` or `(! test)`; sometimes, this immediately
+; results in an exception due to the path being infeasible, and so `if`
+; adds an assertion that path condition implies that the test must be true
+; or false (depending on which branch failed). this assertion,
+; even though it's useless, sometimes gets added to the assertion store,
+; because `(&& a b)`, which is used when augmenting the path condition,
+; sometimes results in a concrete Racket value of `#f`, but `(=> a (! b))`,
+; which is used when adding an assertion, does not simplify in Racket to `#t`
+; even though it is provably so.
+;
+; this thin wrapper around Rosette's `if` does this test eagerly, looking
+; at the combination of the path condition with the test, and if it can be
+; determined that the other path is infeasible, it skips evaluating it
+; altogether.
+;
+; this should be safe to use with arbitrary Rosette code (even code
+; e.g. involving mutation).
+(define (if* test-expr then-expr else-expr)
+  (define test (! (false? test-expr)))
+  (!cond
+   [(!or (!eq? test #t) (!not (&& (pc) (! test))))
+    (then-expr)]
+   [(!or (!eq? test #f) (!not (&& (pc) test)))
+    (else-expr)]
+   [else
+    (if test (then-expr) (else-expr))]))
 
 ; we could implement this with `equal?`, but that is slow. Yosys uses `=` mostly for
 ; bitvectors, and only in a few cases for booleans. The boolean cases are:
@@ -79,24 +114,10 @@
   (foldl <=> #t args))
 
 ; to match SMTLIB's xor, which can take multiple arguments
-(define-syntax (variadic-xor stx)
+(define-syntax ($xor stx)
   (syntax-parse stx
     [(_ (~seq a0 a1) ...) #'(! (<=>* (~@ a0 a1) ...))]
     [(_ a (~seq b0 b1) ...) #'(<=>* a (~@ b0 b1) ...)]))
-
-(module+ test
-  (require rackunit)
-  (test-case "xor"
-    (define-symbolic* a b c d e f boolean?)
-    (define (reference-xor x y)
-      (! (<=> x y)))
-    (define (reference-variadic-xor . args)
-      (foldl reference-xor #f args))
-    (check-pred unsat? (verify (assert (equal? (reference-variadic-xor a) (variadic-xor a)))))
-    (check-pred unsat? (verify (assert (equal? (reference-variadic-xor a b) (variadic-xor a b)))))
-    (check-pred unsat? (verify (assert (equal? (reference-variadic-xor a b c) (variadic-xor a b c)))))
-    (check-pred unsat? (verify (assert (equal? (reference-variadic-xor a b c d) (variadic-xor a b c d)))))
-    (check-pred unsat? (verify (assert (equal? (reference-variadic-xor a b c d e) (variadic-xor a b c d e)))))))
 
 (define (bvxnor . args)
   (bvnot (apply bvxor args)))
