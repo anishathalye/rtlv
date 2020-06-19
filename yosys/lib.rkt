@@ -86,7 +86,18 @@
             ; overapproximate, return fresh symbolic value
             (fresh-symbolic overapproximated-value (type-of (vector-ref a 0)))
             ; do the indexing into the vector
-            (vector-ref a (bitvector->natural i))))
+            (let-values ([(v asserted) (with-asserts (vector-ref a (bitvector->natural i)))])
+              ; when Rosette can't easily prove (via rewrite rules that make this check a
+              ; concrete Racket value) that we're taking a valid index into the vector,
+              ; it emits an assertion that the index is in-bounds. however, we know that the index
+              ; will always be in-bounds, because the Yosys-emitted code ensures this: we are indexing
+              ; into a vector of length 2^n with an index that is a (bitvector n).
+              ;
+              ; if we wanted to, we could easily check this here by calling `(verify asserted)`
+              ; to prove that the assertion could never fail. if we didn't use `with-asserts`
+              ; to capture the assertion, the assertion store would keep growing, which
+              ; would not be ideal.
+              v)))
       ; UF representation
       (a i)))
 
@@ -106,7 +117,11 @@
 (define (store a i v)
   (if (array-representation-vector)
       ; vector representation
-      (vector-update a (bitvector->natural i) v)
+      (let-values ([(v asserted) (with-asserts (vector-update a (bitvector->natural i) v))])
+        ; for reasons similar to the `select` case above, we can capture and ignore the assertions
+        ; emitted during the evaluation of the vector-set!, which are related to `pos` being a
+        ; valid index into the vector
+        v)
       ; UF representation
       (lambda (i*) (if (bveq i i*) v (a i*)))))
 

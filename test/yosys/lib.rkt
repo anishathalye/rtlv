@@ -25,3 +25,11 @@
   (check-pred @unsat? (@verify (@assert (@equal? (reference-xor a b c) ($xor a b c)))))
   (check-pred @unsat? (@verify (@assert (@equal? (reference-xor a b c d) ($xor a b c d)))))
   (check-pred @unsat? (@verify (@assert (@equal? (reference-xor a b c d e) ($xor a b c d e))))))
+
+(test-case "select/store asserts"
+  (@define-symbolic* i (@bitvector 3))
+  (define v (@vector 0 1 2 3 4 5 6 7))
+  ($select v i)
+  (check-pred empty? (@asserts))
+  ($store v i -1)
+  (check-pred empty? (@asserts)))

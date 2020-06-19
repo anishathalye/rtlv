@@ -1,8 +1,8 @@
 #lang rosette/safe
 
 (require "verilog/soc.rkt"
-         (only-in racket struct-copy string-contains?)
-         (only-in racket/port with-output-to-string)
+         (prefix-in ! racket)
+         (prefix-in ! (only-in racket/port with-output-to-string))
          shiva
          rosutil
          yosys/parameters
@@ -13,13 +13,13 @@
 (overapproximate-symbolic-store-threshold 64)
 
 (define (input-setter s)
-  (struct-copy soc_s s
+  (!struct-copy soc_s s
                [resetn #t]
                [gpio_pin_in (bv 0 8)]
                [uart_rx (bv #b1111 4)]))
 
 (define (init-input-setter s)
-  (struct-copy soc_s s
+  (!struct-copy soc_s s
                [resetn #f]
                [gpio_pin_in (bv 0 8)]
                [uart_rx (bv #b1111 4)]))
@@ -38,13 +38,13 @@
 (define (overapproximate s cycle)
   (if (equal? cycle 4)
       ; overapproximate RAM/cpuregs behavior to avoid a big ite that doesn't matter
-      (struct-copy soc_s s [cpu.cpuregs (fresh-memory-like cpuregs (|soc_m cpu.cpuregs| s))])
+      (!struct-copy soc_s s [cpu.cpuregs (fresh-memory-like cpuregs (|soc_m cpu.cpuregs| s))])
       #f))
 
 (test-case "verify-deterministic-start: limit"
   (define ret #f)
   (define output
-    (with-output-to-string
+    (!with-output-to-string
       (lambda ()
         (set!
          ret
@@ -66,7 +66,7 @@
 (test-case "verify-deterministic-start: soc"
   (define ncycles #f)
   (define output
-    (with-output-to-string
+    (!with-output-to-string
       (lambda ()
         (set!
          ncycles
@@ -82,8 +82,9 @@
           #:overapproximate overapproximate
           #:print-style 'names
           #:try-verify-after 450)))))
+  (check-pred !empty? (asserts))
   (check-equal? ncycles 472)
-  (check-true (string-contains? output "-> sat!"))
-  (check-true (string-contains? output "cycle 472"))
-  (check-true (string-contains? output "-> unsat!"))
-  (check-false (string-contains? output "cycle 473")))
+  (check-true (!string-contains? output "-> sat!"))
+  (check-true (!string-contains? output "cycle 472"))
+  (check-true (!string-contains? output "-> unsat!"))
+  (check-false (!string-contains? output "cycle 473")))
