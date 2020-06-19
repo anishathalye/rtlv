@@ -1,6 +1,6 @@
 #lang racket
 
-(require (prefix-in r: rosette)
+(require (prefix-in @ rosette/safe)
          (for-syntax syntax/parse
                      racket/syntax))
 
@@ -17,17 +17,17 @@
 
 (define (concretize term [error-on-failure #f])
   (let/ec return
-    (define vars (r:symbolics term))
+    (define vars (@symbolics term))
     (when (empty? vars) (return term))
-    (define model (r:solve #t))
-    (when (not (r:sat? model))
+    (define model (@solve #t))
+    (when (not (@sat? model))
       (error "can't find single concrete state"))
-    (define term-concrete (r:evaluate term (r:complete-solution model (r:symbolics term))))
+    (define term-concrete (@evaluate term (@complete-solution model (@symbolics term))))
     (define must-be-same
-      (r:unsat?
-       (r:verify
-        (r:assert
-         (r:equal? term term-concrete)))))
+      (@unsat?
+       (@verify
+        (@assert
+         (@equal? term term-concrete)))))
     (cond
       [must-be-same term-concrete]
       [(not error-on-failure) term]

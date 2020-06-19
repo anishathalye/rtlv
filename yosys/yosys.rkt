@@ -8,7 +8,7 @@
  "memoize.rkt"
  "parameters.rkt"
  rosutil
- (prefix-in racket: racket))
+ (prefix-in ! racket))
 
 (provide
  declare-datatype define-fun
@@ -101,7 +101,7 @@
          (define-syntax (internal-copy-name stx)
            (syntax-parse stx
              [(_ type state [internal-name value] /...)
-              #`(racket:struct-copy
+              #`(!struct-copy
                  type
                  state
                  #,@(for/list ([i (syntax->list #'(internal-name /...))]
@@ -125,7 +125,7 @@
   (set! define-fun-hooks (cons hook define-fun-hooks)))
 
 (define (trigger-hooks name fn)
-  (racket:for ([hook define-fun-hooks])
+  (!for ([hook define-fun-hooks])
               (hook name fn))
   (set! define-fun-hooks '()))
 
@@ -246,8 +246,8 @@
     [(#f) (display x port)]
     [else
      (if (array-representation-vector)
-         (racket:for ([e x]
-                      [i (racket:in-naturals)])
+         (!for ([e x]
+                      [i (!in-naturals)])
                      (fprintf port "~n    ~a:" i)
                      (show-bitvector e port mode))
          (begin
