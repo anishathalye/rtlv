@@ -12,7 +12,6 @@
  (rename-out [$xor xor]
              [$if ite])
  ; exports from Rosette
- #%module-begin #%top-interaction #%app #%datum #%top ; module lang
  true false ; constants
  (rename-out [! not] [&& and] [|| or]) ; logical
  bv ; types

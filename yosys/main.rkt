@@ -1,7 +1,9 @@
 #lang racket/base
 
-(require "yosys.rkt"
-         "lib.rkt")
+(require "core.rkt"
+         "lib.rkt"
+         "yosys.rkt")
 
-(provide (all-from-out "yosys.rkt")
-         (all-from-out "lib.rkt"))
+(provide (all-from-out "core.rkt")
+         (all-from-out "lib.rkt")
+         (all-from-out "yosys.rkt"))
