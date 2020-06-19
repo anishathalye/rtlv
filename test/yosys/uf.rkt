@@ -3,7 +3,7 @@
 (require rackunit
          yosys/parameters
          "verilog/ram.rkt"
-         (only-in racket struct-copy parameterize))
+         (only-in racket/base struct-copy parameterize))
 
 (test-case "not uninterpreted function by default"
   (define s0 (new-symbolic-ram_s))

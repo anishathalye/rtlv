@@ -1,8 +1,8 @@
-#lang racket
+#lang racket/base
 
 (require "../main.rkt"
          racket/pretty
-         (for-syntax syntax/parse))
+         (for-syntax racket/base syntax/parse))
 
 (provide (except-out (all-from-out "../main.rkt") #%module-begin)
          (rename-out [yosys-debug-expand-module-begin #%module-begin]))

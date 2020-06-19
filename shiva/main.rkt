@@ -1,7 +1,8 @@
-#lang racket
+#lang racket/base
 
-(require (prefix-in @ rosette/safe)
-         (for-syntax syntax/parse))
+(require racket/list racket/format
+         (prefix-in @ rosette/safe)
+         (for-syntax racket/base syntax/parse))
 
 (provide with-invariants verify-deterministic-start)
 

@@ -2,7 +2,7 @@
 
 (require rosutil
          rackunit
-         (only-in racket exn:fail?))
+         (only-in racket/base exn:fail?))
 
 (test-case "concretize concrete"
   (check-equal? (concretize (bv 1337 32)) (bv 1337 32)))

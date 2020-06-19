@@ -3,7 +3,7 @@
 (require rackunit
          "verilog/counter.rkt"
          "verilog/print-test.rkt"
-         (only-in racket struct-copy string-append))
+         (only-in racket/base struct-copy string-append))
 
 (test-case "basic verification: when enable and reset are not set, value doesn't change"
   (define s0 (new-symbolic-counter_s))

@@ -1,9 +1,9 @@
-#lang racket
+#lang racket/base
 
 (require racket/pretty
-         (for-syntax syntax/parse))
+         (for-syntax racket/base syntax/parse))
 
-(provide (except-out (all-from-out racket) #%module-begin)
+(provide (except-out (all-from-out racket/base) #%module-begin)
          (rename-out [yosys-debug-read-module-begin #%module-begin]))
 
 (define-syntax (yosys-debug-read-module-begin stx)

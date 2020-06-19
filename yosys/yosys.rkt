@@ -8,7 +8,7 @@
  "memoize.rkt"
  "parameters.rkt"
  rosutil
- (prefix-in ! racket))
+ (prefix-in ! racket/base))
 
 (provide
  declare-datatype define-fun

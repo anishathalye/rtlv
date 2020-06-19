@@ -1,8 +1,7 @@
 #lang rosette/safe
 
 (require "verilog/soc.rkt"
-         (prefix-in ! racket)
-         (prefix-in ! (only-in racket/port with-output-to-string))
+         (prefix-in ! (combine-in racket/base racket/list racket/port racket/string))
          shiva
          rosutil
          yosys/parameters

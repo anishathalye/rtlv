@@ -1,8 +1,8 @@
-#lang racket
+#lang racket/base
 
-(require (prefix-in @ rosette/safe)
-         (for-syntax syntax/parse
-                     racket/syntax))
+(require racket/list
+         (prefix-in @ rosette/safe)
+         (for-syntax racket/base syntax/parse racket/syntax))
 
 (provide concretize concretize-fields)
 

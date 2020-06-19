@@ -3,7 +3,7 @@
 (require rackunit
          (prefix-in counter: "verilog/counter.rkt")
          (prefix-in picorv32: "verilog/picorv32.rkt")
-         (only-in racket make-vector))
+         (only-in racket/base make-vector))
 
 (test-case "zero initialization: new-zeroed-counter_s should create an instance of counter with all fields set to 0"
   (define s0 (counter:new-zeroed-counter_s))

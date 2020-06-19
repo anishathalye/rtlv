@@ -2,7 +2,7 @@
 
 (require rosutil
          rackunit
-         (only-in racket values))
+         (only-in racket/base values))
 
 (test-case "build-list"
   (check-equal? (build-list 10 values) '(0 1 2 3 4 5 6 7 8 9))

@@ -1,6 +1,7 @@
-#lang racket
+#lang racket/base
 
-(require (only-in rosette bv? expression constant symbolics union)
+(require racket/list racket/match
+         (only-in rosette bv? expression constant symbolics union)
          (only-in rosette/base/core/term type-deconstruct get-type typed?))
 
 (provide value-size value-depth find-large-terms)

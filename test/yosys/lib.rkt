@@ -1,6 +1,7 @@
-#lang racket
+#lang racket/base
 
-(require rackunit
+(require racket/list
+         rackunit
          (prefix-in @ rosette/safe)
          (prefix-in $ yosys/lib))
 

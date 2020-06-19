@@ -1,4 +1,4 @@
-#lang racket
+#lang racket/base
 
 (require shiva
          (prefix-in @ rosette/safe)

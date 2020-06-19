@@ -1,6 +1,7 @@
-#lang racket
+#lang racket/base
 
-(require (for-syntax syntax/parse))
+(require racket/function
+         (for-syntax racket/base syntax/parse))
 
 (provide new-memoization-context define/memoize1)
 

@@ -1,6 +1,7 @@
-#lang racket
+#lang racket/base
 
-(require syntax/readerr)
+(require racket/list racket/string racket/match
+         syntax/readerr)
 
 (provide (rename-out
           [yosys-read read]
