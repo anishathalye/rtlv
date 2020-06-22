@@ -10,7 +10,7 @@
 (define-syntax (yosys-debug-expand-module-begin stx)
   (syntax-parse stx
     [(_ form ...)
-     #`(#%module-begin
+     #'(#%module-begin
         (let ([expanded (syntax->datum (expand-syntax-once #'form))])
           (when (not (equal? expanded '(void)))
             (pretty-print expanded (current-output-port) 1))) ...)]))

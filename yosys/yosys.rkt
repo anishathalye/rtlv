@@ -70,7 +70,7 @@
      #:with (getter ...) (for/list ([external-name (syntax->list #'(member.external-name ...))])
                            (format-id stx "~a-~a" #'datatype-name external-name))
      #:with /... (quote-syntax ...)
-     #`(begin
+     #'(begin
          (struct datatype-name (init.name member.external-name ...)
            #:methods gen:custom-write
            [(define (write-proc x port mode) (show x port mode))]
@@ -153,7 +153,7 @@
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum =) e (field:id (~datum next_state))))
      #:with internal-copy-name (format-id stx "internal-copy-~a" #'type)
-     #`(begin
+     #'(begin
          (define (name state)
            (new-memoization-context
             (internal-copy-name type state [field e])))
@@ -163,7 +163,7 @@
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum and) ((~datum =) e (field:id (~datum next_state))) ...))
      #:with internal-copy-name (format-id stx "internal-copy-~a" #'type)
-     #`(begin
+     #'(begin
          (define (name state)
            (new-memoization-context
             (internal-copy-name type state [field e] ...)))

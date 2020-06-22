@@ -9,5 +9,5 @@
 (define-syntax (yosys-debug-read-module-begin stx)
   (syntax-parse stx
     [(_ form ...)
-     #`(#%module-begin
+     #'(#%module-begin
         (pretty-print 'form (current-output-port) 1) ...)]))
