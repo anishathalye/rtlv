@@ -1,10 +1,30 @@
 #lang racket/base
 
-(require racket/list racket/format
+(require racket/list racket/format racket/contract
          (prefix-in @ rosette/safe)
          (for-syntax racket/base syntax/parse))
 
-(provide with-invariants verify-deterministic-start)
+(provide
+ (contract-out
+  [with-invariants ((any/c any/c (-> any/c any))
+                    (any/c)
+                    . ->* .
+                    any)]
+  [verify-deterministic-start ((any/c
+                                (-> any)
+                                #:invariant (-> any/c any)
+                                #:step (-> any/c any)
+                                #:init-input-setter (-> any/c any)
+                                #:input-setter (-> any/c any)
+                                #:state-getters (listof (cons/c symbol? (-> any/c any))))
+                               (#:statics (-> any/c any)
+                                #:overapproximate (or/c #f (-> any/c natural-number/c any))
+                                #:print-style (or/c 'full 'names 'none)
+                                #:try-verify-after natural-number/c
+                                #:limit (or/c #f natural-number/c)
+                                #:debug (or/c #f (-> natural-number/c any/c @solution? any)))
+                               . ->* .
+                               (or/c #f natural-number/c))]))
 
 ; state should be a new state constructed with new-symbolic-{type}
 ;
@@ -39,7 +59,7 @@
               (@solve
                (@assert
                 (@and (invariant-fn state)
-                       (@not (@equal? symbolic-field-value concrete-field-value))))))))
+                      (@not (@equal? symbolic-field-value concrete-field-value))))))))
       (if
        must-be-same
        ; in this case, we know it must always be equal to the concrete value we found
@@ -64,8 +84,8 @@
 (define (show-differences s1 s2 [only-first #f] [only-names #f])
   (for ([e1 s1]
         [e2 s2])
-    (define name (first e1))
-    (define-values (v1 v2) (values (second e1) (second e2)))
+    (define name (car e1))
+    (define-values (v1 v2) (values (cdr e1) (cdr e2)))
     (define diff (not (@equal? v1 v2)))
     (when diff
       (if only-names
@@ -122,7 +142,7 @@
        (define res
          (if (cycle . >= . try-verify-after)
              (let ()
-               (define states (@map (@lambda (f) (@list (@first f) ((@second f) sn))) state-getters))
+               (define states (map (lambda (f) (cons (car f) ((cdr f) sn))) state-getters))
                ; note: we get (symbolics sn) rather than just of states, so that we can get a fully concrete state if we want
                (define symvars (@symbolics sn))
                (define complete-soln (@complete-solution (@solve #t) symvars))
@@ -139,8 +159,8 @@
                   (define sn-concrete (@evaluate sn complete-soln))
                   (define-values (model query-time)
                     (time (@solve (@assert (@and
-                                              (@not (@equal? states states-concrete))
-                                              (@equal? (statics sn) (statics sn-concrete)))))))
+                                            (@not (@equal? states states-concrete))
+                                            (@equal? (statics sn) (statics sn-concrete)))))))
                   (printf "  smt query returned in ~ams~n" (~r query-time #:precision 1))
                   (when debug
                     (debug cycle sn model))

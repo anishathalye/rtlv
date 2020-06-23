@@ -36,9 +36,9 @@
 (test-case "inputs/outputs/registers"
   (check-equal? (length inputs) 3)
   (check-equal? (length outputs) 1)
-  (check-equal? (first outputs) (list '|counter_n count| |counter_n count|))
+  (check-equal? (first outputs) (cons '|counter_n count| |counter_n count|))
   (check-equal? (length registers) 1)
-  (check-equal? (first registers) (list '|counter_n count| |counter_n count|)))
+  (check-equal? (first registers) (cons '|counter_n count| |counter_n count|)))
 
 (test-case "display/write"
   (define s0 (new-zeroed-print_test_s))

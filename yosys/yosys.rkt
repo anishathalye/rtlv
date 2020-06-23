@@ -202,7 +202,7 @@
   (void))
 
 (define-simple-macro (make-appender lst)
-  (lambda (name fn) (set! lst (cons (list name fn) lst))))
+  (lambda (name fn) (set! lst (cons (cons name fn) lst))))
 
 (define-syntax (yosys-smt2-input stx)
   (syntax-parse stx
