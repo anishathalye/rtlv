@@ -4,7 +4,7 @@
          (prefix-in @ rosette/safe)
          (for-syntax racket/base syntax/parse racket/syntax))
 
-(provide concretize concretize-fields)
+(provide concretize concretize-fields concretize-all-fields)
 
 ; Note: these functions are not general-purpose -- it is in general,
 ; NOT safe to use them in arbitrary Rosette programs. At best,
@@ -16,22 +16,23 @@
 ; (it's all pure functional code), so I think this is okay.
 
 (define (concretize term [error-on-failure #f])
-  (let/ec return
-    (define vars (@symbolics term))
-    (when (empty? vars) (return term))
-    (define model (@solve #t))
-    (when (not (@sat? model))
-      (error "can't find single concrete state"))
-    (define term-concrete (@evaluate term (@complete-solution model (@symbolics term))))
-    (define must-be-same
-      (@unsat?
-       (@verify
-        (@assert
-         (@equal? term term-concrete)))))
-    (cond
-      [must-be-same term-concrete]
-      [(not error-on-failure) term]
-      [else (error 'concretize "failed to concretize term")])))
+  (define vars (@symbolics term))
+  (cond
+    [(empty? vars) term]
+    [else
+     (define model (@solve #t))
+     (when (not (@sat? model))
+       (error "can't find single concrete state"))
+     (define term-concrete (@evaluate term (@complete-solution model vars)))
+     (define must-be-same
+       (@unsat?
+        (@verify
+         (@assert
+          (@equal? term term-concrete)))))
+     (cond
+       [must-be-same term-concrete]
+       [(not error-on-failure) term]
+       [else (error 'concretize "failed to concretize term")])]))
 
 (define-syntax (concretize-fields stx)
   (syntax-parse stx
@@ -44,3 +45,10 @@
           struct-id
           struct-v
           [field-name (concretize (getter-name struct-v))] ...))]))
+
+(define (concretize-all-fields state-constructor state)
+  (apply
+   state-constructor
+   (let ([vec (struct->vector state)])
+     (for/list ([i (in-range 1 (vector-length vec))])
+       (concretize (vector-ref vec i))))))
