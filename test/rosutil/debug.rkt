@@ -83,10 +83,10 @@
 
   (define s (module (bvadd x y) (bvand (bvmul x (bvnot y)) z) z (bv 0 8)))
   (define state-getters (list
-    (list 'a module-a)
-    (list 'b module-b)
-    (list 'c module-c)
-    (list 'd module-d)))
+    (cons 'a module-a)
+    (cons 'b module-b)
+    (cons 'c module-c)
+    (cons 'd module-d)))
 
   (check-equal? (find-large-terms s state-getters) 1) ; b
   (check-equal? (find-large-terms s state-getters #:threshold 1) 2)) ; a & b

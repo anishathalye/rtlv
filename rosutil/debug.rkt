@@ -92,8 +92,8 @@
                           #:output? [output? #f])
   (define term-depths
     (for/list ([state-getter state-getters])
-      (let* ([name (first state-getter)]
-             [getter (second state-getter)]
+      (let* ([name (car state-getter)]
+             [getter (cdr state-getter)]
              [term (getter state)]
              [depth (value-depth term)]
              [symvars (symbolics term)])
