@@ -4,7 +4,8 @@
          (prefix-in @ rosette/safe)
          (for-syntax racket/base syntax/parse racket/syntax))
 
-(provide concretize concretize-fields concretize-all-fields)
+(provide concretize concretize-fields concretize-all-fields
+         all-values)
 
 ; Note: these functions are not general-purpose -- it is in general,
 ; NOT safe to use them in arbitrary Rosette programs. At best,
@@ -52,3 +53,21 @@
    (let ([vec (struct->vector state)])
      (for/list ([i (in-range 1 (vector-length vec))])
        (concretize (vector-ref vec i))))))
+
+(define (all-values term #:limit [limit #f])
+  (define vars (@symbolics term))
+  (let rec ([acc '()]
+            [neq-rest #t]
+            [sofar 0])
+    (cond
+      [(and limit (>= sofar limit)) acc]
+      [else
+       (define model (@solve (@assert neq-rest)))
+       (cond
+         [(@unsat? model) acc]
+         [(@unknown? model) acc] ; give up
+         [else ; sat
+          (define concrete (@evaluate term (@complete-solution model vars)))
+          (rec (cons concrete acc)
+               (@&& neq-rest (@not (@equal? term concrete)))
+               (add1 sofar))])])))

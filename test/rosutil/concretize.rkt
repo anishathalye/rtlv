@@ -2,7 +2,8 @@
 
 (require rosutil
          rackunit
-         (only-in racket/base exn:fail?))
+         (only-in racket/base exn:fail?)
+         (prefix-in ! racket/base))
 
 (test-case "concretize: concrete"
   (check-equal? (concretize (bv 1337 32)) (bv 1337 32)))
@@ -50,3 +51,18 @@
   (define f* (concretize-all-fields foo f))
   (check-eq? (foo-bar f*) #f)
   (check-eq? (foo-baz f*) #t))
+
+(test-case "all-values"
+  (define-symbolic* x (bitvector 8))
+  (define t (concat (extract 1 0 x) (bv 0 1)))
+  (define all (all-values t))
+  (check-equal? (!length all) 4)
+  (check-not-false (!member (bv #b000 3) all))
+  (check-not-false (!member (bv #b010 3) all))
+  (check-not-false (!member (bv #b100 3) all))
+  (check-not-false (!member (bv #b110 3) all)))
+
+(test-case "all-values limit"
+  (define-symbolic* x y (bitvector 8))
+  (define t (bvxor x y))
+  (check-equal? (!length (all-values t #:limit 10)) 10))
