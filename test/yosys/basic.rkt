@@ -3,7 +3,8 @@
 (require rackunit
          "verilog/counter.rkt"
          "verilog/print-test.rkt"
-         (only-in racket/base struct-copy string-append))
+         yosys/parameters
+         (only-in racket/base struct-copy string-append parameterize regexp-match))
 
 (test-case "basic verification: when enable and reset are not set, value doesn't change"
   (define s0 (new-symbolic-counter_s))
@@ -67,3 +68,14 @@ print_test_s {
 }
 EOS
                 ))
+
+(test-case "print filter"
+  (define s0 (new-zeroed-print_test_s))
+  (parameterize ([print-filter #rx"^c.*$"])
+    (check-equal? (format "~v" s0) #<<EOS
+print_test_s {
+  clk: #f
+  count: (bv #x00 8)
+}
+EOS
+                  )))

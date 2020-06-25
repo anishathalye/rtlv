@@ -88,10 +88,11 @@
              [else
               ; print something more human-readable
               (fprintf port "~a {~n" 'datatype-name)
-              (begin
-                (fprintf port "  ~a:" 'member.external-name)
-                (member.show (getter x) port mode)
-                (fprintf port "\n")) ...
+              (let ([include? (print-filter)])
+                (when (include? 'member.external-name)
+                  (fprintf port "  ~a:" 'member.external-name)
+                  (member.show (getter x) port mode)
+                  (fprintf port "\n")) ...)
               (fprintf port "}")]))
          (provide datatype-name)
          ; like struct-copy, but uses the internal names instead of external names
