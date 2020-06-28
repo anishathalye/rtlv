@@ -21,8 +21,7 @@
                       (raise-argument-error 'array-representation-vector
                                             "boolean?"
                                             v))
-                    v)
-                  'array-representation-vector))
+                    v)))
 
 ; overapproximating stores to symbolic addresses:
 ; #f for no overapproximation
@@ -37,8 +36,7 @@
                       (raise-argument-error 'overapproximate-symbolic-store-threshold
                                             "(or/c #f natural-number/c)"
                                             v))
-                    v)
-                  'overapproximate-symbolic-store-threhsold))
+                    v)))
 
 ; overapproximating loads from symbolic addresses:
 ; #f for no overapproximation
@@ -53,8 +51,7 @@
                       (raise-argument-error 'overapproximate-symbolic-load-threshold
                                             "(or/c #f natural-number/c)"
                                             v))
-                    v)
-                  'overapproximate-symbolic-load-threhsold))
+                    v)))
 
 (define (to-print-filter v)
   (cond
@@ -84,5 +81,4 @@
                       (raise-argument-error 'print-filter
                                             "(or/c #f string? regexp? (procedure-arity-includes/c 1))"
                                             v))
-                    (to-print-filter v))
-                  'print-filter))
+                    (to-print-filter v))))
