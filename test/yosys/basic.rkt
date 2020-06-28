@@ -69,13 +69,39 @@ print_test_s {
 EOS
                 ))
 
-(test-case "print filter"
+(test-case "print filter: regexp"
   (define s0 (new-zeroed-print_test_s))
   (parameterize ([print-filter #rx"^c.*$"])
     (check-equal? (format "~v" s0) #<<EOS
 print_test_s {
   clk: #f
   count: (bv #x00 8)
+}
+EOS
+                  )))
+
+(test-case "print filter: string"
+  (define s0 (new-zeroed-print_test_s))
+  (parameterize ([print-filter "c"])
+    (check-equal? (format "~v" s0) #<<EOS
+print_test_s {
+  clk: #f
+  count: (bv #x00 8)
+}
+EOS
+                  )))
+
+(test-case "filter/or"
+  (define s0 (new-zeroed-print_test_s))
+  (parameterize ([print-filter (filter/or "ram" #rx"^c..$")])
+    (check-equal? (format "~v" s0) #<<EOS
+print_test_s {
+  clk: #f
+  ram:
+    0: (bv #x00000000 32)
+    1: (bv #x00000000 32)
+    2: (bv #x00000000 32)
+    3: (bv #x00000000 32)
 }
 EOS
                   )))

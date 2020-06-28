@@ -1,11 +1,15 @@
 #lang racket/base
 
-(require racket/contract)
+(require racket/contract racket/string)
 
 (provide array-representation-vector
          overapproximate-symbolic-store-threshold
          overapproximate-symbolic-load-threshold
-         print-filter)
+         print-filter
+         (contract-out
+          [filter/or
+           (->* () #:rest (listof (or/c #f string? regexp? (-> symbol? any)))
+                (-> symbol? any))]))
 
 ; array representation:
 ; #t for vector
@@ -52,21 +56,33 @@
                     v)
                   'overapproximate-symbolic-load-threhsold))
 
+(define (to-print-filter v)
+  (cond
+    [(not v) (lambda (s) #t)]
+    [(string? v) (lambda (s) (string-contains? (symbol->string s) v))]
+    [(regexp? v) (lambda (s) (regexp-match v (symbol->string s)))]
+    [else v]))
+
+(define (filter/or . filters)
+  (define filter-functions (map to-print-filter filters))
+  (lambda (s)
+    (for/or ([fn (in-list filter-functions)])
+      (fn s))))
+
 ; filter what fields are included in the printed representation of a struct
 ; #f: no filter
+; string?: to require the string representation of the symbol contains a given substring
 ; regexp?: to match the string representation of the symbol
-; symbol? -> boolean?: filter function
+; symbol? -> any: filter function
 (define print-filter
   (make-parameter (lambda (s) #t)
                   (lambda (v)
                     (unless (or (not v)
+                                (string? v)
                                 (regexp? v)
                                 ((procedure-arity-includes/c 1) v))
                       (raise-argument-error 'print-filter
-                                            "(or/c #f regexp? (procedure-arity-includes/c 1))"
+                                            "(or/c #f string? regexp? (procedure-arity-includes/c 1))"
                                             v))
-                    (cond
-                      [(not v) (lambda (s) #t)]
-                      [(regexp? v) (lambda (s) (regexp-match v (symbol->string s)))]
-                      [else v]))
+                    (to-print-filter v))
                   'print-filter))
