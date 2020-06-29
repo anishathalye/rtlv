@@ -76,24 +76,26 @@
            [(define (write-proc x port mode) (show x port mode))]
            #:transparent)
          (define (show x port mode)
-           (cond
-             [(boolean? mode)
-              ; write or display
-              (fprintf port "#(struct:~a " 'datatype-name)
-              (show-boolean (init-getter x) port mode)
-              (begin
-                (fprintf port " ")
-                (member.show (getter x) port mode)) ...
-              (fprintf port ")")]
-             [else
-              ; print something more human-readable
-              (fprintf port "~a {~n" 'datatype-name)
-              (let ([include? (print-filter)])
+           (let ([include? (print-filter)])
+             (cond
+               [(boolean? mode)
+                ; write or display
+                (fprintf port "#(struct:~a" 'datatype-name)
+                (when (include? 'init.name)
+                  (fprintf port " ")
+                  (show-boolean (init-getter x) port mode))
+                (when (include? 'member.external-name)
+                  (fprintf port " ")
+                  (member.show (getter x) port mode)) ...
+                (fprintf port ")")]
+               [else
+                ; print something more human-readable
+                (fprintf port "~a {~n" 'datatype-name)
                 (when (include? 'member.external-name)
                   (fprintf port "  ~a:" 'member.external-name)
                   (member.show (getter x) port mode)
-                  (fprintf port "\n")) ...)
-              (fprintf port "}")]))
+                  (fprintf port "\n")) ...
+                (fprintf port "}")])))
          (provide datatype-name)
          ; like struct-copy, but uses the internal names instead of external names
          (begin-for-syntax
@@ -127,7 +129,7 @@
 
 (define (trigger-hooks name fn)
   (!for ([hook define-fun-hooks])
-              (hook name fn))
+        (hook name fn))
   (set! define-fun-hooks '()))
 
 (define-syntax (define-fun stx)
@@ -248,9 +250,9 @@
     [else
      (if (array-representation-vector)
          (!for ([e x]
-                      [i (!in-naturals)])
-                     (fprintf port "~n    ~a:" i)
-                     (show-bitvector e port mode))
+                [i (!in-naturals)])
+               (fprintf port "~n    ~a:" i)
+               (show-bitvector e port mode))
          (begin
            (fprintf port " ")
            (print x port mode)))]))
