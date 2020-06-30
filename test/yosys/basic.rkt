@@ -105,3 +105,14 @@ print_test_s {
 }
 EOS
                   )))
+
+(test-case "filter/not"
+  (define s0 (new-zeroed-print_test_s))
+  (parameterize ([print-filter (filter/not "ram")])
+    (check-equal? (format "~v" s0) #<<EOS
+print_test_s {
+  clk: #f
+  count: (bv #x00 8)
+}
+EOS
+                  )))

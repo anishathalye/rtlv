@@ -7,8 +7,11 @@
          overapproximate-symbolic-load-threshold
          print-filter
          (contract-out
+          [filter/not
+           (-> filter/c
+               (-> symbol? any))]
           [filter/or
-           (->* () #:rest (listof (or/c #f string? regexp? (-> symbol? any)))
+           (->* () #:rest (listof filter/c)
                 (-> symbol? any))]))
 
 ; array representation:
@@ -53,12 +56,19 @@
                                             v))
                     v)))
 
+(define filter/c
+  (or/c #f string? regexp? (-> symbol? any)))
+
 (define (to-print-filter v)
   (cond
     [(not v) (lambda (s) #t)]
     [(string? v) (lambda (s) (string-contains? (symbol->string s) v))]
     [(regexp? v) (lambda (s) (regexp-match v (symbol->string s)))]
     [else v]))
+
+(define (filter/not filter)
+  (define filter-function (to-print-filter filter))
+  (lambda (s) (not (filter-function s))))
 
 (define (filter/or . filters)
   (define filter-functions (map to-print-filter filters))
