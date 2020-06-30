@@ -8,7 +8,6 @@
     (provide (all-from-out module-path) ...)))
 
 (require/provide
- "racket-api.rkt"
  "concretize.rkt"
  "convenience.rkt"
  "debug.rkt")

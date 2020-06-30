@@ -33,15 +33,15 @@
                            #`(if (array-representation-vector)
                                  ; vector representation
                                  (list->vector
-                                  (build-list (expt 2 depth)
-                                              (lambda (_)
-                                                (fresh-symbolic #,name-stx (bitvector width)))))
+                                  (!build-list (expt 2 depth)
+                                               (lambda (_)
+                                                 (fresh-symbolic #,name-stx (bitvector width)))))
                                  ; UF representation
                                  (fresh-symbolic #,name-stx (~> (bitvector depth) (bitvector width)))))
              #:with zero-ctor #'(if (array-representation-vector)
                                     ; vector representation
                                     (list->vector
-                                     (replicate (expt 2 depth) (bv 0 width)))
+                                     (!build-list (expt 2 depth) (lambda (_) (bv 0 width))))
                                     ; UF representation
                                     (lambda (addr) (bv 0 width)))))
 

@@ -106,8 +106,8 @@
   (if (and symbolic-index thresh (>= (vector-length vec) thresh))
       (let ([type (type-of (vector-ref vec 0))])
         (list->vector
-         (build-list (vector-length vec)
-                     (lambda (_) (fresh-symbolic overapproximation type)))))
+         (!build-list (vector-length vec)
+                      (lambda (_) (fresh-symbolic overapproximation type)))))
       ; XXX this seems inefficient
       (let ([vec-copy (apply vector (vector->list vec))])
         (vector-set! vec-copy pos v)

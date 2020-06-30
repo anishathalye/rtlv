@@ -31,8 +31,8 @@
 (define-simple-macro (fresh-memory-like name mem)
   (let ([elem-type (type-of (vector-ref mem 0))])
     (list->vector
-     (build-list (vector-length mem)
-                 (lambda (_) (fresh-symbolic name elem-type))))))
+     (!build-list (vector-length mem)
+                  (lambda (_) (fresh-symbolic name elem-type))))))
 
 (define (overapproximate s cycle)
   (if (equal? cycle 4)
