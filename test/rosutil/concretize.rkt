@@ -32,6 +32,13 @@
   (check-equal? term (concretize term))
   (check-exn !exn:fail? (thunk (concretize term #t))))
 
+(test-case "concrete?"
+  (define-symbolic* x (bitvector 8))
+  (define t1 (concat (bv 0 6) (extract 1 0 x)))
+  (check-false (concrete? t1))
+  (define t2 (bveq (bv 0 8) (concat (bv -1 4) (extract 3 0 x))))
+  (check-true (concrete? t2)))
+
 (test-case "concretize-fields"
   (define-symbolic* x (bitvector 8))
   (struct foo (bar baz) #:transparent)

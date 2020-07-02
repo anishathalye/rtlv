@@ -10,4 +10,5 @@
 (require/provide
  "concretize.rkt"
  "convenience.rkt"
- "debug.rkt")
+ "debug.rkt"
+ "dependence.rkt")

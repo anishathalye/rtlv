@@ -8,8 +8,10 @@
 (provide
  concretize-fields
  (contract-out
+  [concrete? (-> any/c
+                 boolean?)]
   [concretize (->* (any/c)
-                   (boolean?)
+                   (#:error-on-failure boolean?)
                    any)]
   [concretize-all-fields (-> yosys-module?
                              yosys-module?)]
@@ -30,10 +32,20 @@
 ; where the assertion store is empty, and there is no mutation everywhere
 ; (it's all pure functional code), so I think this is okay.
 
-(define (concretize term [error-on-failure #f])
+(define (concretize term #:error-on-failure [error-on-failure #f])
+  (define-values (term-concrete ok) (concretize* term))
+  (if (or ok (not error-on-failure))
+      term-concrete
+      (error 'concretize "failed to concretize term")))
+
+(define (concrete? term)
+  (define-values (_ ok) (concretize* term))
+  ok)
+
+(define (concretize* term)
   (define vars (@symbolics term))
   (cond
-    [(empty? vars) term]
+    [(empty? vars) (values term #t)]
     [else
      (define model (@solve #t))
      (when (not (@sat? model))
@@ -44,10 +56,9 @@
         (@verify
          (@assert
           (@equal? term term-concrete)))))
-     (cond
-       [must-be-same term-concrete]
-       [(not error-on-failure) term]
-       [else (error 'concretize "failed to concretize term")])]))
+     (if must-be-same
+         (values term-concrete #t)
+         (values term #f))]))
 
 (define-syntax (concretize-fields stx)
   (syntax-parse stx
