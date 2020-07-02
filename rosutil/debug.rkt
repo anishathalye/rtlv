@@ -1,10 +1,18 @@
 #lang racket/base
 
-(require racket/list racket/match
+(require racket/list racket/match racket/contract
          (only-in rosette bv? expression constant symbolics union)
          (only-in rosette/base/core/term type-deconstruct get-type typed?))
 
-(provide value-size value-depth find-large-terms)
+(provide
+ (contract-out
+  [value-size (-> any/c natural-number/c)]
+  [value-depth (-> any/c natural-number/c)]
+  [find-large-terms (->* (any/c
+                          (listof (cons/c symbol? (-> any/c any))))
+                         (#:threshold natural-number/c
+                          #:output? boolean?)
+                         natural-number/c)]))
 
 ; calculate a Rosette value's size
 ;

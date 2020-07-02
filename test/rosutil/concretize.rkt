@@ -1,8 +1,6 @@
 #lang rosette/safe
 
-(require rosutil
-         rackunit
-         (only-in racket/base exn:fail?)
+(require rosutil rackunit
          (prefix-in ! racket/base))
 
 (test-case "concretize: concrete"
@@ -32,7 +30,7 @@
     (concat (bv 0 6) (extract 1 0 x)))
   (check-false (empty? (symbolics term)))
   (check-equal? term (concretize term))
-  (check-exn exn:fail? (lambda () (concretize term #t))))
+  (check-exn !exn:fail? (thunk (concretize term #t))))
 
 (test-case "concretize-fields"
   (define-symbolic* x (bitvector 8))

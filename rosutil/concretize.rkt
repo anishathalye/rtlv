@@ -1,11 +1,25 @@
 #lang racket/base
 
-(require racket/list
+(require racket/list racket/contract
          (prefix-in @ rosette/safe)
          (for-syntax racket/base syntax/parse racket/syntax))
 
-(provide concretize concretize-fields concretize-all-fields
-         all-values)
+(provide
+ concretize-fields
+ (contract-out
+  [concretize (->* (any/c)
+                   (boolean?)
+                   any)]
+  [concretize-all-fields (-> procedure?
+                             any/c
+                             any)]
+  [all-values (->i ([term any/c])
+                   (#:limit [limit (or/c boolean? natural-number/c)])
+                   [result (limit)
+                           (and/c list?
+                                  (if (unsupplied-arg? limit)
+                                      any/c
+                                      (property/c length (<=/c limit))))])]))
 
 ; Note: these functions are not general-purpose -- it is in general,
 ; NOT safe to use them in arbitrary Rosette programs. At best,
