@@ -63,6 +63,8 @@
     [(_ datatype-name:id ((_
                            init:yosys-initial-state
                            member:yosys-member ...)))
+     #:with make-name (format-id stx "make-~a" #'datatype-name)
+     #:with update-name (format-id stx "update-~a" #'datatype-name)
      #:with internal-copy-name (format-id stx "internal-copy-~a" #'datatype-name)
      #:with new-symbolic-name (format-id stx "new-symbolic-~a" #'datatype-name)
      #:with new-zeroed-name (format-id stx "new-zeroed-~a" #'datatype-name)
@@ -71,6 +73,7 @@
                            (format-id stx "~a-~a" #'datatype-name external-name))
      #:with /... (quote-syntax ...)
      #'(begin
+         ; struct declaration
          (struct datatype-name (init.name member.external-name ...)
            #:methods gen:custom-write
            [(define (write-proc x port mode) (show x port mode))]
@@ -97,30 +100,46 @@
                   (fprintf port "\n")) ...
                 (fprintf port "}")])))
          (provide datatype-name)
+
          ; like struct-copy, but uses the internal names instead of external names
+         ; for transition function
          (begin-for-syntax
            (define name-assoc
              (make-hash '((member.name . member.external-name) ...))))
          (define-syntax (internal-copy-name stx)
            (syntax-parse stx
-             [(_ type state [internal-name value] /...)
+             [(_ state [internal-name value] /...)
               #`(!struct-copy
-                 type
+                 datatype-name
                  state
                  #,@(for/list ([i (syntax->list #'(internal-name /...))]
                                [v (syntax->list #'(value /...))])
                       #`(#,(datum->syntax #'datatype-name (hash-ref name-assoc (syntax-e i))) #,v)))
               ]))
+
+         ; getters
          (define init.name init-getter)
          (define member.name getter) ... ; for internal use only, not exported
          (define member.external-name getter) ...
          (provide getter) ...
+
+         ; constructors
          (define (new-symbolic-name)
            (datatype-name init.ctor member.ctor ...))
          (provide new-symbolic-name)
          (define (new-zeroed-name)
            (datatype-name init.zero-ctor member.zero-ctor ...))
-         (provide new-zeroed-name))]))
+         (provide new-zeroed-name)
+         (define-syntax update-name
+           (syntax-parser
+             [(_ struct-expr [field:id value:expr] /...)
+              #'(!struct-copy datatype-name struct-expr [field value] /...)]))
+         (provide update-name)
+         (define-syntax make-name
+           (syntax-parser
+             [(_ [field:id value:expr] /...)
+              #'(update-name (new-zeroed-name) [field value] /...)]))
+         (provide make-name))]))
 
 (define define-fun-hooks '())
 
@@ -149,7 +168,7 @@
      #'(begin
          (define (name state)
            (new-memoization-context
-            (internal-copy-name type state)))
+            (internal-copy-name state)))
          (provide name)
          (trigger-hooks 'name name))]
     ; case 2: when state has a single field
@@ -159,7 +178,7 @@
      #'(begin
          (define (name state)
            (new-memoization-context
-            (internal-copy-name type state [field e])))
+            (internal-copy-name state [field e])))
          (provide name)
          (trigger-hooks 'name name))]
     ; case 3: when state has multiple fields
@@ -169,7 +188,7 @@
      #'(begin
          (define (name state)
            (new-memoization-context
-            (internal-copy-name type state [field e] ...)))
+            (internal-copy-name state [field e] ...)))
          (provide name)
          (trigger-hooks 'name name))]))
 

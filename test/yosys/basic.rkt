@@ -3,8 +3,8 @@
 (require rackunit
          "verilog/counter.rkt"
          "verilog/print-test.rkt"
-         yosys/parameters
-         (only-in racket/base struct-copy string-append parameterize regexp-match))
+         yosys
+         (only-in racket/base string-append parameterize regexp-match))
 
 (test-case "basic verification: when enable and reset are not set, value doesn't change"
   (define s0 (new-symbolic-counter_s))
@@ -20,8 +20,7 @@
     (assert (equal? (|counter_n count| s0) (|counter_n count| s1))))))
 
 (test-case "basic verification: counter wraparound even when no reset"
-  (define s0 (struct-copy
-              counter_s
+  (define s0 (update-counter_s
               (new-symbolic-counter_s)
               [nrst #t]))
   (define s1 (counter_t s0))

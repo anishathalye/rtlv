@@ -12,16 +12,18 @@
 (overapproximate-symbolic-store-threshold 64)
 
 (define (input-setter s)
-  (!struct-copy soc_s s
-               [resetn #t]
-               [gpio_pin_in (bv 0 8)]
-               [uart_rx (bv #b1111 4)]))
+  (update-soc_s
+   s
+   [resetn #t]
+   [gpio_pin_in (bv 0 8)]
+   [uart_rx (bv #b1111 4)]))
 
 (define (init-input-setter s)
-  (!struct-copy soc_s s
-               [resetn #f]
-               [gpio_pin_in (bv 0 8)]
-               [uart_rx (bv #b1111 4)]))
+  (update-soc_s
+   s
+   [resetn #f]
+   [gpio_pin_in (bv 0 8)]
+   [uart_rx (bv #b1111 4)]))
 
 (define (statics s)
   ; for some reason, the picorv32 has a physical register for x0/zero,
@@ -37,50 +39,50 @@
 (define (overapproximate s cycle)
   (if (equal? cycle 4)
       ; overapproximate RAM/cpuregs behavior to avoid a big ite that doesn't matter
-      (!struct-copy soc_s s [cpu.cpuregs (fresh-memory-like cpuregs (|soc_m cpu.cpuregs| s))])
+      (update-soc_s s [cpu.cpuregs (fresh-memory-like cpuregs (|soc_m cpu.cpuregs| s))])
       #f))
 
 (test-case "verify-deterministic-start: limit"
   (define ret #f)
   (define output
     (!with-output-to-string
-      (lambda ()
-        (set!
-         ret
-         (verify-deterministic-start
-          soc_s
-          new-symbolic-soc_s
-          #:invariant soc_i
-          #:step soc_t
-          #:init-input-setter init-input-setter
-          #:input-setter input-setter
-          #:state-getters (append registers memories)
-          #:statics statics
-          #:overapproximate overapproximate
-          #:print-style 'names
-          #:try-verify-after 450
-          #:limit 450)))))
+     (lambda ()
+       (set!
+        ret
+        (verify-deterministic-start
+         soc_s
+         new-symbolic-soc_s
+         #:invariant soc_i
+         #:step soc_t
+         #:init-input-setter init-input-setter
+         #:input-setter input-setter
+         #:state-getters (append registers memories)
+         #:statics statics
+         #:overapproximate overapproximate
+         #:print-style 'names
+         #:try-verify-after 450
+         #:limit 450)))))
   (check-false ret))
 
 (test-case "verify-deterministic-start: soc"
   (define ncycles #f)
   (define output
     (!with-output-to-string
-      (lambda ()
-        (set!
-         ncycles
-         (verify-deterministic-start
-          soc_s
-          new-symbolic-soc_s
-          #:invariant soc_i
-          #:step soc_t
-          #:init-input-setter init-input-setter
-          #:input-setter input-setter
-          #:state-getters (append registers memories)
-          #:statics statics
-          #:overapproximate overapproximate
-          #:print-style 'names
-          #:try-verify-after 450)))))
+     (lambda ()
+       (set!
+        ncycles
+        (verify-deterministic-start
+         soc_s
+         new-symbolic-soc_s
+         #:invariant soc_i
+         #:step soc_t
+         #:init-input-setter init-input-setter
+         #:input-setter input-setter
+         #:state-getters (append registers memories)
+         #:statics statics
+         #:overapproximate overapproximate
+         #:print-style 'names
+         #:try-verify-after 450)))))
   (check-pred !empty? (asserts))
   (check-equal? ncycles 472)
   (check-true (!string-contains? output "-> sat!"))
