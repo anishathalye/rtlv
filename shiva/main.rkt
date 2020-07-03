@@ -100,17 +100,17 @@
     (@solve (@assert (@not (@equal? (statics s0-with-inv) (statics s1))))))
   (@unsat? res))
 
-; struct-constructo@ constructor for module?
-; symbolic-constructo@ returns fully symbolic module?
+; struct-constructor: constructor for module?
+; symbolic-constructor: returns fully symbolic module?
 ; invariant: module? -> boolean?
 ; step: module? -> module?
-; init-input-sette@ module? -> module?, sets input for reset state (cycle 0)
-; input-sette@ module? -> module?, sets input for all other cycles
+; init-input-setter: module? -> module?, sets input for reset state (cycle 0)
+; input-setter: module? -> module?, sets input for all other cycles
 ; state-getters: module? -> list of (list name getter)
 ; statics: module? -> any?, captures static state in module (that can't change at all, e.g. due to dead code); untrusted
 ; overapproximate: module?, integer? -> module? or #f, returns potential overapproximation at a particular cycle; trusted / part of TCB
 ; print-style: 'full, 'names, or 'none
-; try-verify-afte@ don't invoke SMT solver until given step
+; try-verify-after: don't invoke SMT solver until given step
 ; debug: integer?, module?, model? -> (void), called at every step with cycle, state, and model
 ;
 ; returns #f if verifying deterministic start failed after hitting the limit on number of cycles
