@@ -1,5 +1,5 @@
 #lang s-exp syntax/module-reader
-yosys
+yosys/verilog
 #:read yosys:read
 #:read-syntax yosys:read-syntax
 

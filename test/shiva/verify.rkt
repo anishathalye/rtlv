@@ -4,7 +4,7 @@
          (prefix-in ! (combine-in racket/base racket/list racket/port racket/string))
          shiva
          rosutil
-         yosys/parameters
+         yosys
          syntax/parse/define
          rackunit)
 
