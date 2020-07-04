@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require racket/list racket/contract
+         yosys
          (prefix-in @ rosette/safe)
          (for-syntax racket/base syntax/parse racket/syntax))
 
@@ -10,9 +11,8 @@
   [concretize (->* (any/c)
                    (boolean?)
                    any)]
-  [concretize-all-fields (-> procedure?
-                             any/c
-                             any)]
+  [concretize-all-fields (-> yosys-module?
+                             yosys-module?)]
   [all-values (->i ([term any/c])
                    (#:limit [limit (or/c boolean? natural-number/c)])
                    [result (limit)
@@ -61,12 +61,9 @@
           struct-v
           [field-name (concretize (getter-name struct-v))] ...))]))
 
-(define (concretize-all-fields state-constructor state)
-  (apply
-   state-constructor
-   (let ([vec (struct->vector state)])
-     (for/list ([i (in-range 1 (vector-length vec))])
-       (concretize (vector-ref vec i))))))
+(define (concretize-all-fields state)
+  (for/struct (v state)
+    (concretize v)))
 
 (define (all-values term #:limit [limit #f])
   (define vars (@symbolics term))

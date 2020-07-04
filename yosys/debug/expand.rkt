@@ -1,10 +1,10 @@
 #lang racket/base
 
-(require "../main.rkt"
+(require "../verilog.rkt"
          racket/pretty
          (for-syntax racket/base syntax/parse))
 
-(provide (except-out (all-from-out "../main.rkt") #%module-begin)
+(provide (except-out (all-from-out "../verilog.rkt") #%module-begin)
          (rename-out [yosys-debug-expand-module-begin #%module-begin]))
 
 (define-syntax (yosys-debug-expand-module-begin stx)

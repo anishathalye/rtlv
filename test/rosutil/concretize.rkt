@@ -1,6 +1,6 @@
 #lang rosette/safe
 
-(require rosutil rackunit
+(require rosutil rackunit yosys
          (prefix-in ! racket/base))
 
 (test-case "concretize: concrete"
@@ -43,10 +43,19 @@
 
 (test-case "concretize-all-fields"
   (define-symbolic* x (bitvector 8))
-  (struct foo (bar baz) #:transparent)
+  (struct foo (bar baz) #:transparent
+    #:methods gen:yosys-module
+    [(define (fields _) '(bar baz))
+     (define (get-field x s)
+       (case s
+         [(bar) (foo-bar x)]
+         [(baz) (foo-baz x)]))
+     (define (map-fields x f)
+       (foo (f 'bar (foo-bar x))
+            (f 'baz (foo-baz x))))])
   (define f (foo (bveq (bv -1 32) (concat (bv 0 24) x))
                  (not (bveq (bv -1 32) (concat (bv 0 24) x)))))
-  (define f* (concretize-all-fields foo f))
+  (define f* (concretize-all-fields f))
   (check-eq? (foo-bar f*) #f)
   (check-eq? (foo-baz f*) #t))
 

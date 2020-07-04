@@ -1,29 +1,29 @@
 #lang racket/base
 
 (require racket/list racket/format racket/contract
+         yosys
          (prefix-in @ rosette/safe)
          (for-syntax racket/base syntax/parse))
 
 (provide
  (contract-out
-  [with-invariants ((any/c any/c (-> any/c any))
-                    (any/c)
-                    . ->* .
-                    any)]
-  [verify-deterministic-start ((any/c
-                                (-> any)
-                                #:invariant (-> any/c any)
-                                #:step (-> any/c any)
-                                #:init-input-setter (-> any/c any)
-                                #:input-setter (-> any/c any)
-                                #:state-getters (listof (cons/c symbol? (-> any/c any))))
-                               (#:statics (-> any/c any)
-                                #:overapproximate (or/c #f (-> any/c natural-number/c any))
+  [with-invariants (->*
+                    (yosys-module? (-> yosys-module? any))
+                    (yosys-module?)
+                    yosys-module?)]
+  [verify-deterministic-start (->*
+                               ((-> yosys-module?)
+                                #:invariant (-> yosys-module? any)
+                                #:step (-> yosys-module? yosys-module?)
+                                #:init-input-setter (-> yosys-module? any)
+                                #:input-setter (-> yosys-module? any)
+                                #:state-getters (listof (cons/c symbol? (-> yosys-module? any))))
+                               (#:statics (-> yosys-module? any)
+                                #:overapproximate (or/c #f (-> yosys-module? natural-number/c (or/c #f yosys-module?)))
                                 #:print-style (or/c 'full 'names 'none)
                                 #:try-verify-after natural-number/c
                                 #:limit (or/c #f natural-number/c)
-                                #:debug (or/c #f (-> natural-number/c any/c @solution? any)))
-                               . ->* .
+                                #:debug (or/c #f (-> natural-number/c yosys-module? @solution? any)))
                                (or/c #f natural-number/c))]))
 
 ; state should be a new state constructed with new-symbolic-{type}
@@ -36,39 +36,28 @@
 ;
 ; it won't work, for example, for a large memory where a part of it
 ; is a constant, but the rest is undefined at initialization
-(define (with-invariants struct-constructor symbolic-state invariant-fn [fallback #f])
+(define (with-invariants symbolic-state invariant-fn [fallback #f])
   (define state symbolic-state)
   (define model-example
     (@solve (@assert (invariant-fn state))))
   (when (not (@sat? model-example))
     (error 'with-invariants "invariant unsatisfiable"))
-  (define state-example (@evaluate state model-example))
-  ; state-example may still have symbolics in it (we didn't call complete-solution).
-  ; this is an optimization: if a field in there is not concrete, we can skip it
-  ; without an expensive call to the solver
-  (define symbolic-state-vector (struct->vector state))
-  (define concrete-state-vector (struct->vector state-example))
-  (define fallback-vector (if fallback (struct->vector fallback) #f))
-  (define maybe-concretized-fields
-    (for/list ([i (in-range 1 (vector-length symbolic-state-vector))])
-      (define symbolic-field-value (vector-ref symbolic-state-vector i))
-      (define concrete-field-value (vector-ref concrete-state-vector i))
-      (define must-be-same
-        (and (empty? (@symbolics concrete-field-value))
-             (@unsat?
-              (@solve
-               (@assert
-                (@and (invariant-fn state)
-                      (@not (@equal? symbolic-field-value concrete-field-value))))))))
-      (if
-       must-be-same
-       ; in this case, we know it must always be equal to the concrete value we found
-       concrete-field-value
-       ; but if not, keep the old symbolic value
-       (if fallback-vector
-           (vector-ref fallback-vector i)
-           symbolic-field-value))))
-  (apply struct-constructor maybe-concretized-fields))
+  (for/struct ((n v) state)
+    (define v-example (@evaluate v model-example))
+    ; note: v-example may still have symbolics in it (we didn't call complete-solution on the model).
+    ; this is an optimization: if a field is not concrete, we can skip it
+    ; without an expensive call to the solver
+    (define must-be-same
+      (and (empty? (@symbolics v-example))
+           (@unsat?
+            (@solve
+             (@assert
+              (@and (invariant-fn state)
+                    (@not (@equal? v v-example))))))))
+    (cond
+      [must-be-same v-example]
+      [fallback (get-field fallback n)]
+      [else v])))
 
 (define (time* thunk)
   (define start (current-inexact-milliseconds))
@@ -100,23 +89,15 @@
     (@solve (@assert (@not (@equal? (statics s0-with-inv) (statics s1))))))
   (@unsat? res))
 
-; struct-constructor: constructor for module?
-; symbolic-constructor: returns fully symbolic module?
-; invariant: module? -> boolean?
-; step: module? -> module?
-; init-input-setter: module? -> module?, sets input for reset state (cycle 0)
-; input-setter: module? -> module?, sets input for all other cycles
-; state-getters: module? -> list of (list name getter)
-; statics: module? -> any?, captures static state in module (that can't change at all, e.g. due to dead code); untrusted
-; overapproximate: module?, integer? -> module? or #f, returns potential overapproximation at a particular cycle; trusted / part of TCB
-; print-style: 'full, 'names, or 'none
-; try-verify-after: don't invoke SMT solver until given step
-; debug: integer?, module?, model? -> (void), called at every step with cycle, state, and model
+; symbolic-constructor: returns fully symbolic module
+; init-input-setter: sets input for reset state (cycle 0)
+; input-setter: sets input for all other cycles
+; statics: captures static state in module (that can't change at all, e.g. due to dead code); untrusted
+; overapproximate: returns potential overapproximation at a particular cycle; trusted / part of TCB
 ;
 ; returns #f if verifying deterministic start failed after hitting the limit on number of cycles
 ; otherwise returns the number of cycles it took to verify (a truthy value)
 (define (verify-deterministic-start
-         struct-constructor
          symbolic-constructor
          #:invariant invariant
          #:step step
@@ -129,7 +110,7 @@
          #:try-verify-after [try-verify-after 0]
          #:limit [limit #f]
          #:debug [debug #f])
-  (define s0-with-inv (with-invariants struct-constructor (symbolic-constructor) invariant))
+  (define s0-with-inv (with-invariants (symbolic-constructor) invariant))
   (when (not (verify-statics s0-with-inv step statics))
     (error 'verify-deterministic-start "failed to prove statics"))
   (define s0 (init-input-setter s0-with-inv))

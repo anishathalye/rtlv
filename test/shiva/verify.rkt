@@ -50,7 +50,6 @@
        (set!
         ret
         (verify-deterministic-start
-         soc_s
          new-symbolic-soc_s
          #:invariant soc_i
          #:step soc_t
@@ -72,7 +71,6 @@
        (set!
         ncycles
         (verify-deterministic-start
-         soc_s
          new-symbolic-soc_s
          #:invariant soc_i
          #:step soc_t

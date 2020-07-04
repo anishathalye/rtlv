@@ -5,8 +5,7 @@
  syntax/parse/define
  ; we need to be careful of what we import for runtime, because
  ; whatever we use needs to be compatible with Rosette
- "memoize.rkt"
- "parameters.rkt"
+ "memoize.rkt" "parameters.rkt" "generic.rkt"
  rosutil
  (prefix-in ! racket/base))
 
@@ -77,6 +76,17 @@
          (struct datatype-name (init.name member.external-name ...)
            #:methods gen:custom-write
            [(define (write-proc x port mode) (show x port mode))]
+           #:methods gen:yosys-module
+           [(define (fields _)
+              (list 'init.name 'member.external-name ...))
+            (define (get-field x field-name)
+              (case field-name
+                [(init.name) (init-getter x)]
+                [(member.external-name) (getter x)] ...))
+            (define (map-fields x f)
+              (datatype-name
+               (f 'init.name (init-getter x))
+               (f 'member.external-name (getter x)) ...))]
            #:transparent)
          (define (show x port mode)
            (let ([include? (print-filter)])

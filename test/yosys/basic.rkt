@@ -115,3 +115,17 @@ print_test_s {
 }
 EOS
                   )))
+
+(test-case "generic"
+  (define s0 (new-symbolic-counter_s))
+  (define s1 (update-field s0 'nrst #f))
+  (check-eq? (counter_s-nrst s1) #f)
+  (check-eq? (get-field s1 'nrst) #f)
+  (define zeroed
+    (for/struct (v s1)
+      (define t (type-of v))
+      (cond
+        [(eq? t boolean?) #f]
+        [(bitvector? t) (bv 0 (bitvector-size t))])))
+  (check-equal? zeroed (counter_s #f #f (bv 0 8) #f #f))
+  (check-equal? (fields zeroed) '(counter_is clk count en nrst)))
