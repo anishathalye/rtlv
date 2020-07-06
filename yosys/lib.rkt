@@ -83,7 +83,7 @@
             [thresh (overapproximate-symbolic-load-threshold)])
         (if (and symbolic-index thresh (>= (vector-length a) thresh))
             ; overapproximate, return fresh symbolic value
-            (fresh-symbolic overapproximated-value (type-of (vector-ref a 0)))
+            (fresh-symbolic 'select-overapproximated-value (type-of (vector-ref a 0)))
             ; do the indexing into the vector
             (let-values ([(v asserted) (with-asserts (vector-ref a (bitvector->natural i)))])
               ; when Rosette can't easily prove (via rewrite rules that make this check a
@@ -105,9 +105,8 @@
   (define thresh (overapproximate-symbolic-store-threshold))
   (if (and symbolic-index thresh (>= (vector-length vec) thresh))
       (let ([type (type-of (vector-ref vec 0))])
-        (list->vector
-         (!build-list (vector-length vec)
-                      (lambda (_) (fresh-symbolic overapproximation type)))))
+        (!build-vector (vector-length vec)
+                       (lambda (_) (fresh-symbolic 'overapproximation type))))
       ; XXX this seems inefficient
       (let ([vec-copy (apply vector (vector->list vec))])
         (vector-set! vec-copy pos v)

@@ -20,41 +20,39 @@
     #:attributes (show ctor zero-ctor)
     (pattern (~datum Bool)
              #:with show #'show-boolean
-             #:attr ctor (lambda (name-stx) #`(fresh-symbolic #,name-stx boolean?))
+             #:with ctor #'(lambda (name) (fresh-symbolic name boolean?))
              #:with zero-ctor #'#f)
     (pattern ((~datum _) (~datum BitVec) num:nat)
              #:with show #'show-bitvector
-             #:attr ctor (lambda (name-stx) #`(fresh-symbolic #,name-stx (bitvector num)))
+             #:with ctor #'(lambda (name) (fresh-symbolic name (bitvector num)))
              #:with zero-ctor #'(bv 0 num))
     (pattern ((~datum Array) ((~datum _) (~datum BitVec) depth:nat) ((~datum _) (~datum BitVec) width:nat))
              #:with show #'show-array
-             #:attr ctor (lambda (name-stx)
-                           #`(if (array-representation-vector)
+             #:with ctor #'(lambda (name)
+                             (if (array-representation-vector)
                                  ; vector representation
-                                 (list->vector
-                                  (!build-list (expt 2 depth)
-                                               (lambda (_)
-                                                 (fresh-symbolic #,name-stx (bitvector width)))))
+                                 (!build-vector (expt 2 depth)
+                                                (lambda (_)
+                                                  (fresh-symbolic name (bitvector width))))
                                  ; UF representation
-                                 (fresh-symbolic #,name-stx (~> (bitvector depth) (bitvector width)))))
+                                 (fresh-symbolic name (~> (bitvector depth) (bitvector width)))))
              #:with zero-ctor #'(if (array-representation-vector)
                                     ; vector representation
-                                    (list->vector
-                                     (!build-list (expt 2 depth) (lambda (_) (bv 0 width))))
+                                    (!build-vector (expt 2 depth) (lambda (_) (bv 0 width)))
                                     ; UF representation
                                     (lambda (addr) (bv 0 width)))))
 
   (define-splicing-syntax-class yosys-member
     #:attributes (external-name name show ctor zero-ctor)
     (pattern (~seq (name:id type:yosys-type) external-name:id)
-             #:with show (attribute type.show)
-             #:with ctor ((attribute type.ctor) #'external-name)
-             #:with zero-ctor (attribute type.zero-ctor)))
+             #:with show #'type.show
+             #:with ctor #'(type.ctor 'external-name)
+             #:with zero-ctor #'type.zero-ctor))
 
   (define-syntax-class yosys-initial-state
     #:attributes (name ctor zero-ctor)
     (pattern (name:id (~datum Bool))
-             #:with ctor #'(fresh-symbolic name boolean?)
+             #:with ctor #'(fresh-symbolic 'name boolean?)
              #:with zero-ctor #'#f)))
 
 (define-syntax (declare-datatype stx)
