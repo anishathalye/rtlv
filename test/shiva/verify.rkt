@@ -30,18 +30,6 @@
   ; cpuregs[0], whose value can never change in practice
   (vector-ref (|soc_m cpu.cpuregs| s) 0))
 
-(define-simple-macro (fresh-memory-like name mem)
-  (let ([elem-type (type-of (vector-ref mem 0))])
-    (list->vector
-     (!build-list (vector-length mem)
-                  (lambda (_) (fresh-symbolic name elem-type))))))
-
-(define (overapproximate s cycle)
-  (if (equal? cycle 4)
-      ; overapproximate RAM/cpuregs behavior to avoid a big ite that doesn't matter
-      (update-soc_s s [cpu.cpuregs (fresh-memory-like cpuregs (|soc_m cpu.cpuregs| s))])
-      #f))
-
 (test-case "verify-deterministic-start: limit"
   (define ret #f)
   (define output
@@ -57,7 +45,6 @@
          #:input-setter input-setter
          #:state-getters (append registers memories)
          #:statics statics
-         #:overapproximate overapproximate
          #:print-style 'names
          #:try-verify-after 450
          #:limit 450)))))
@@ -78,7 +65,6 @@
          #:input-setter input-setter
          #:state-getters (append registers memories)
          #:statics statics
-         #:overapproximate overapproximate
          #:print-style 'names
          #:try-verify-after 450)))))
   (check-pred !empty? (asserts))
