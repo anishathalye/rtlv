@@ -12,5 +12,5 @@
     [(_ form ...)
      #'(#%module-begin
         (let ([expanded (syntax->datum (expand-syntax-once #'form))])
-          (when (not (equal? expanded '(void)))
+          (unless (equal? expanded '(void))
             (pretty-print expanded (current-output-port) 1))) ...)]))

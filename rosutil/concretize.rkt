@@ -8,8 +8,8 @@
 (provide
  concretize-fields
  (contract-out
-  [concrete? (-> any/c
-                 boolean?)]
+  [concrete (-> any/c
+                @solution?)]
   [concretize (->* (any/c)
                    (#:error-on-failure boolean?)
                    any)]
@@ -38,27 +38,26 @@
       term-concrete
       (error 'concretize "failed to concretize term")))
 
-(define (concrete? term)
-  (define-values (_ ok) (concretize* term))
-  ok)
+(define (concrete term)
+  (define-values (_ res) (concretize* term))
+  res)
 
 (define (concretize* term)
   (define vars (@symbolics term))
   (cond
-    [(empty? vars) (values term #t)]
+    [(empty? vars) (values term (@unsat))]
     [else
      (define model (@solve #t))
-     (when (not (@sat? model))
+     (unless (@sat? model)
        (error "can't find single concrete state"))
      (define term-concrete (@evaluate term (@complete-solution model vars)))
-     (define must-be-same
-       (@unsat?
-        (@verify
-         (@assert
-          (@equal? term term-concrete)))))
-     (if must-be-same
-         (values term-concrete #t)
-         (values term #f))]))
+     (define res
+       (@verify
+        (@assert
+         (@equal? term term-concrete))))
+     (if (@unsat? res)
+         (values term-concrete res)
+         (values term res))]))
 
 (define-syntax (concretize-fields stx)
   (syntax-parse stx

@@ -1,8 +1,9 @@
 #lang racket/base
 
-(require racket/list racket/format racket/contract
+(require racket/list racket/format racket/contract racket/match racket/set racket/function
+         syntax/parse/define
          yosys
-         (prefix-in @ rosette/safe)
+         (prefix-in @ (combine-in rosette/safe rosutil))
          (for-syntax racket/base syntax/parse))
 
 (provide
@@ -15,16 +16,27 @@
                                ((-> yosys-module?)
                                 #:invariant (-> yosys-module? any)
                                 #:step (-> yosys-module? yosys-module?)
-                                #:init-input-setter (-> yosys-module? any)
-                                #:input-setter (-> yosys-module? any)
+                                #:reset symbol?
+                                #:reset-active (or/c 'low 'high)
+                                #:inputs (listof (or/c symbol? (cons/c symbol? wire-constant?)))
                                 #:state-getters (listof (cons/c symbol? (-> yosys-module? any))))
-                               (#:statics (-> yosys-module? any)
-                                #:overapproximate (or/c #f (-> yosys-module? natural-number/c (or/c #f yosys-module?)))
+                               (#:output-getters (listof (cons/c symbol? (-> yosys-module? any)))
+                                #:hints (->* (symbol?) #:rest any/c any)
                                 #:print-style (or/c 'full 'names 'none)
                                 #:try-verify-after natural-number/c
                                 #:limit (or/c #f natural-number/c)
-                                #:debug (or/c #f (-> natural-number/c yosys-module? @solution? any)))
+                                #:debug (-> natural-number/c yosys-module? (or/c #f @solution?) any))
                                (or/c #f natural-number/c))]))
+
+(define wire-constant?
+  (flat-named-contract
+   'wire-constant?
+   (lambda (v)
+     (match v
+       [#t #t]
+       [#f #t]
+       [(@bv _ _) #t]
+       [else #f]))))
 
 ; state should be a new state constructed with new-symbolic-{type}
 ;
@@ -40,7 +52,7 @@
   (define state symbolic-state)
   (define model-example
     (@solve (@assert (invariant-fn state))))
-  (when (not (@sat? model-example))
+  (unless (@sat? model-example)
     (error 'with-invariants "invariant unsatisfiable"))
   (for/struct ((n v) state)
     (define v-example (@evaluate v model-example))
@@ -65,35 +77,52 @@
   (define end (current-inexact-milliseconds))
   (values value (- end start)))
 
-(define-syntax (time stx)
-  (syntax-parse stx
-    [(_ e:expr ...)
-     #'(time* (lambda () e ...))]))
+(define-simple-macro (time body ...)
+  (time* (thunk body ...)))
 
-(define (show-differences s1 s2 [only-first #f] [only-names #f])
-  (for ([e1 s1]
-        [e2 s2])
-    (define name (car e1))
-    (define-values (v1 v2) (values (cdr e1) (cdr e2)))
-    (define diff (not (@equal? v1 v2)))
-    (when diff
-      (if only-names
-          (printf "    ~a~n" name)
-          (printf "    ~a: ~a != ~a~n" name v1 v2)))
-    #:break (and diff only-first)
-    (void)))
+(define-simple-macro (define+time (x:id t:id) body ...)
+  (define-values (x t) (time body ...)))
+
+(define/contract (static-values statics state)
+  (-> (listof (or/c symbol? (cons/c symbol? (listof natural-number/c))))
+      yosys-module?
+      (listof (or/c @constant? @term?)))
+  (for/fold ([acc '()])
+            ([i statics])
+    (cond
+      [(symbol? i) (cons (get-field state i) acc)]
+      [else
+       ; symbol (for vector), list of indices
+       (define name (car i))
+       (define indices (cdr i))
+       (define field (get-field state name))
+       (append
+        (for/list ([idx indices])
+          (vector-ref field idx))
+        acc)])))
 
 (define (verify-statics s0-with-inv step statics)
   (define s1 (step s0-with-inv))
   (define res
-    (@solve (@assert (@not (@equal? (statics s0-with-inv) (statics s1))))))
+    (@solve (@assert (@not (@equal? (static-values statics s0-with-inv)
+                                    (static-values statics s1))))))
   (@unsat? res))
 
+; extended for Yosys types (i.e. vectors)
+(define (only-depends-on* value symbolics)
+  (if (not (vector? value))
+      (@only-depends-on/unchecked value symbolics)
+      (let ()
+        (define any-failed
+          (for/or ([v value])
+            (define r (@only-depends-on/unchecked v symbolics))
+            (if (@unsat? r) #f r)))
+        (if (not any-failed)
+            (@unsat)
+            any-failed))))
+
 ; symbolic-constructor: returns fully symbolic module
-; init-input-setter: sets input for reset state (cycle 0)
-; input-setter: sets input for all other cycles
 ; statics: captures static state in module (that can't change at all, e.g. due to dead code); untrusted
-; overapproximate: returns potential overapproximation at a particular cycle; trusted / part of TCB
 ;
 ; returns #f if verifying deterministic start failed after hitting the limit on number of cycles
 ; otherwise returns the number of cycles it took to verify (a truthy value)
@@ -101,73 +130,121 @@
          symbolic-constructor
          #:invariant invariant
          #:step step
-         #:init-input-setter init-input-setter
-         #:input-setter input-setter
+         #:reset reset
+         #:reset-active reset-active
+         #:inputs inputs
          #:state-getters state-getters
-         #:statics [statics (lambda (s) #f)]
-         #:overapproximate [overapproximate #f]
+         #:output-getters [output-getters '()]
+         #:hints [hints (lambda _ #f)]
          #:print-style [print-style 'full]
          #:try-verify-after [try-verify-after 0]
          #:limit [limit #f]
-         #:debug [debug #f])
+         #:debug [debug (lambda _ (void))])
   (define s0-with-inv (with-invariants (symbolic-constructor) invariant))
-  (when (not (verify-statics s0-with-inv step statics))
+  (define statics (or (hints 'statics) '()))
+  (unless (verify-statics s0-with-inv step statics)
     (error 'verify-deterministic-start "failed to prove statics"))
-  (define s0 (init-input-setter s0-with-inv))
+  (define s0 (update-field s0-with-inv reset (if (eq? reset-active 'low) #f #t)))
+  (define allowed-dependencies (list->weak-seteq (static-values statics s0)))
   (define sn s0)
   (define verified #f)
-  (define-values (ignored total-time)
-    (time
-     (for ([cycle (in-naturals)])
-       (printf "cycle ~a~n" cycle)
-       (define res
-         (if (cycle . >= . try-verify-after)
-             (let ()
-               (define states (map (lambda (f) (cons (car f) ((cdr f) sn))) state-getters))
-               ; note: we get (symbolics sn) rather than just of states, so that we can get a fully concrete state if we want
-               (define symvars (@symbolics sn))
-               (define complete-soln (@complete-solution (@solve #t) symvars))
-               (cond
-                 [(@unknown? complete-soln)
-                  ; this isn't a fatal error; maybe things could become easier to solve in a future cycle
-                  ; but it is unlikely
-                  (displayln "warning: solver timed out while trying to find a single concrete solution, which might be a performance bug; treating as SAT and continuing")
-                  #f]
-                 [(@unsat? complete-soln)
-                  (error "state has no concrete solution: bug in input?")]
-                 [else
-                  (define states-concrete (@evaluate states complete-soln))
-                  (define sn-concrete (@evaluate sn complete-soln))
-                  (define-values (model query-time)
-                    (time (@solve (@assert (@and
-                                            (@not (@equal? states states-concrete))
-                                            (@equal? (statics sn) (statics sn-concrete)))))))
-                  (printf "  smt query returned in ~ams~n" (~r query-time #:precision 1))
-                  (when debug
-                    (debug cycle sn model))
-                  (cond
-                    [(@unknown? model)
-                     (displayln "warning: determinism check returned (unknown), treating as SAT and continuing")]
-                    [(@unsat? model)
-                     (displayln "  -> unsat!")]
-                    [else
-                     (displayln "  -> sat!")
-                     (when (not (eq? print-style 'none))
-                       (define states-concrete-2 (@evaluate states (@complete-solution model symvars)))
-                       (show-differences states-concrete states-concrete-2 #t (eq? print-style 'names)))])
-                  model]))
-             #f))
-       (when (@unsat? res)
-         (set! verified cycle))
-       #:break (or verified (and limit (>= cycle limit)))
-       (define-values (sn+1 step-time) (time (step sn)))
-       (printf "  stepped in ~ams~n" (~r step-time #:precision 1))
-       (set! sn
-             (let* ([with-inputs (input-setter sn+1)]
-                    [overapproximation (and overapproximate (overapproximate with-inputs cycle))])
-               (or overapproximation with-inputs))))))
+  (define+time (_ total-time)
+    (for ([cycle (in-naturals)])
+      (printf "cycle ~a~n" cycle)
+
+      (define+time (any-hints hint-time)
+        (define this-hint (hints 'general cycle sn))
+        (when this-hint
+          (for ([hint this-hint])
+            (match hint
+              ; without gc, allowed-dependencies can grow very big
+              ;
+              ; we could prune it by intersecting it with (@symbolics sn),
+              ; but it seems like using a weak set and using gc is actually faster
+              ['collect-garbage (collect-garbage)]
+              [(cons 'abstract args)
+               ; like overapproximate, but we are allowed to depend on the fresh value
+               ; because we prove that the term we're replacing only depends on inputs
+               ;(define allowed-deps-list (set->list allowed-dependencies))
+               (define updates
+                 (for/list ([i args])
+                   (define v (get-field sn i))
+                   (define ok (@unsat? (@only-depends-on/unchecked v allowed-dependencies)))
+                   (cons i (if ok
+                               (let ([v* (@fresh-symbolic i (@type-of v))])
+                                 (set-add! allowed-dependencies v*)
+                                 v*)
+                               v))))
+               (set! sn (update-fields sn updates))])))
+        (not (not this-hint)))
+      (when any-hints
+        (printf "  handled hints in ~ams~n" (~r hint-time #:precision 1)))
+
+      (define+time (res state-analysis-time)
+        (if (>= cycle try-verify-after)
+            (let ()
+              (define states (map (lambda (f) (cons (car f) ((cdr f) sn))) state-getters))
+              (define any-failed
+                (for/or ([name-value states])
+                  (match-define (cons name value) name-value)
+                  (define r (only-depends-on* value allowed-dependencies))
+                  (if (@unsat? r) #f (list name value r))))
+              (if (not any-failed)
+                  (let ()
+                    (displayln " --> unsat!")
+                    (@unsat))
+                  (let ()
+                    (match-define (list name value r) any-failed)
+                    (cond
+                      [(@unknown? r)
+                       (displayln "warning: determinism check returned (unknown), treating as SAT and continuing")]
+                      ; can't be @unsat?, we checked for that earlier
+                      [else
+                       (displayln "  -> sat!")
+                       (case print-style
+                         [(names) (printf "  ~a~n" name)]
+                         [(full) (printf "  ~a: ~v~n" name value)])])
+                    r)))
+            #f))
+      (debug cycle sn res)
+      (when (@unsat? res)
+        (set! verified cycle))
+      (when (>= cycle try-verify-after)
+        (printf "  analyzed state in ~ams~n" (~r state-analysis-time #:precision 1)))
+      #:break (or verified (and limit (>= cycle limit)))
+
+      (define+time (sn+1 step-time) (step sn))
+      (printf "  stepped in ~ams~n" (~r step-time #:precision 1))
+
+      ; check outputs in a similar style as states
+      ; except here, outputs need to be okay at every step
+      (define+time (any-outputs-failed output-analysis-time)
+        (define outputs (map (lambda (f) (cons (car f) ((cdr f) sn+1))) output-getters))
+        (for/or ([name-value outputs])
+          (match-define (cons name value) name-value)
+          (define r (@only-depends-on/unchecked value allowed-dependencies))
+          (if (@unsat? r) #f (list name value r))))
+      (when (not (empty? output-getters))
+        (printf "  analyzed outputs in ~ams~n" (~r output-analysis-time #:precision 1)))
+      (when any-outputs-failed
+        (match-define (list name value r) any-outputs-failed)
+        (case print-style
+          [(names) (printf "  failed: output ~a not deterministic~n" name)]
+          [(full) (printf "  failed: output ~a not deterministic: ~v~n" name value)]))
+      #:break any-outputs-failed
+
+      (define current-inputs
+        (for/list ([i (cons reset inputs)]) ; append reset just in case it's not present
+          (cond
+            [(pair? i) i] ; pre-set value
+            [(eq? i reset) (cons i (if (eq? reset-active 'low) #t #f))] ; special-case reset
+            [else ; symbol
+             (define s (@fresh-symbolic i (@type-of (get-field sn i))))
+             (set-add! allowed-dependencies s)
+             (cons i s)])))
+      (set! sn (update-fields sn+1 current-inputs))))
   (define t (~r (/ total-time 1000) #:precision 1))
   (if verified
       (printf "finished in ~as~n" t)
-      (printf "failed to prove in ~a cycles (took ~as)~n" limit t))
+      (printf "failed to prove (took ~as)~n" t))
   verified)
