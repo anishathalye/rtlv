@@ -2,13 +2,14 @@
 
 (require syntax/parse/define)
 
-(define-simple-macro (require/provide module-path:str ...)
+(define-simple-macro (require+provide module-path:str ...)
   (begin
     (require module-path ...)
     (provide (all-from-out module-path) ...)))
 
-(require/provide
+(require+provide
  "concretize.rkt"
  "convenience.rkt"
  "debug.rkt"
- "dependence.rkt")
+ "dependence.rkt"
+ "hacks.rkt")
