@@ -127,6 +127,7 @@
 
          ; getters
          (define init.name init-getter)
+         (provide init-getter)
          (define member.name getter) ... ; for internal use only, not exported
          (define member.external-name getter) ...
          (provide getter) ...
