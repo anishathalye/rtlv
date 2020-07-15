@@ -23,7 +23,7 @@
   [(define/generic gen-map-fields map-fields)
    (define (update-fields x assoc)
      (define h (make-immutable-hasheq assoc))
-     (gen-map-fields x (lambda (name old-value) (hash-ref h name old-value))))])
+     (gen-map-fields x (lambda (name old-value) (hash-ref h name (lambda () old-value)))))])
 
 (define-syntax for/struct
   (syntax-parser

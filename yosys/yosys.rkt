@@ -140,8 +140,8 @@
          (provide new-zeroed-name)
          (define-syntax update-name
            (syntax-parser
-             [(_ struct-expr [field:id value:expr] /...)
-              #'(!struct-copy datatype-name struct-expr [field value] /...)]))
+             [(_ struct-expr:expr [field:id value:expr] /...)
+              #'(update-fields struct-expr (list (cons 'field value) /...))]))
          (provide update-name)
          (define-syntax make-name
            (syntax-parser
