@@ -25,7 +25,7 @@
                                 #:print-style (or/c 'full 'names 'none)
                                 #:try-verify-after natural-number/c
                                 #:limit (or/c #f natural-number/c)
-                                #:debug (-> natural-number/c yosys-module? (or/c #f @solution?) any))
+                                #:debug (-> natural-number/c yosys-module? (or/c #f @solution?) (or/c #f yosys-module?)))
                                (or/c #f natural-number/c))]))
 
 (define wire-constant?
@@ -139,7 +139,7 @@
          #:print-style [print-style 'full]
          #:try-verify-after [try-verify-after 0]
          #:limit [limit #f]
-         #:debug [debug (lambda _ (void))])
+         #:debug [debug (lambda _ #f)])
   (define s0-with-inv (with-invariants (symbolic-constructor) invariant))
   (define statics (or (hints 'statics) '()))
   (unless (verify-statics s0-with-inv step statics)
@@ -221,7 +221,11 @@
                          [(full) (printf "  ~a: ~v~n" name value)])])
                     r)))
             #f))
-      (debug cycle sn res)
+
+      (let ([sn* (debug cycle sn res)])
+        (when sn*
+          (set! sn sn*)))
+
       (when (@unsat? res)
         (set! verified cycle))
       (when (>= cycle try-verify-after)
