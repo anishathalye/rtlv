@@ -175,6 +175,21 @@
                                  (set-add! allowed-dependencies v*)
                                  v*)
                                v))))
+               (set! sn (update-fields sn updates))]
+              [(cons 'overapproximate args)
+               (define updates
+                 (for/list ([i args])
+                   (define v (get-field sn i))
+                   (define v* (if (vector? v)
+                                  (@fresh-memory-like i v)
+                                  (@fresh-symbolic i (@type-of v))))
+                   (cons i v*)))
+               (set! sn (update-fields sn updates))]
+              [(cons 'concretize args)
+               (define updates
+                 (for/list ([i args])
+                   (define v (get-field sn i))
+                   (cons i (@concretize v))))
                (set! sn (update-fields sn updates))])))
         (not (not this-hint)))
       (when any-hints

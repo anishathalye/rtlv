@@ -4,10 +4,14 @@
          (prefix-in @ rosette/safe))
 
 (provide
+ (rename-out [fresh-memory-like fresh-memory-like/unchecked])
  (contract-out
   [fresh-symbolic (-> (or/c symbol? string?)
                       @solvable?
                       @constant?)]
+  [fresh-memory-like (-> (or/c symbol? string?)
+                         vector?
+                         (vectorof @constant?))]
   [concrete-head? (-> any/c
                       boolean?)]))
 
@@ -28,6 +32,13 @@
   ; make names that look like the ones that come out of define-symbolic*, but a little different
   ; so x%0 instead of x$0
   (@constant (string->uninterned-symbol (format "~a%~a" sym-base counter)) type))
+
+; instantiate a vector of fresh symbolics, in the same form as a Yosys memory
+(define (fresh-memory-like name mem)
+  (let ([elem-type (@type-of (vector-ref mem 0))])
+    (build-vector
+     (vector-length mem)
+     (lambda (i) (fresh-symbolic (format "~a[~a]" name i) elem-type)))))
 
 (define (concrete-head? expr)
   (not (or (@term? expr) (@union? expr))))
