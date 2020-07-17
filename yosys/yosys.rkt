@@ -32,8 +32,8 @@
                              (if (array-representation-vector)
                                  ; vector representation
                                  (!build-vector (expt 2 depth)
-                                                (lambda (_)
-                                                  (fresh-symbolic name (bitvector width))))
+                                                (lambda (i)
+                                                  (fresh-symbolic (format "~a[~a]" name i) (bitvector width))))
                                  ; UF representation
                                  (fresh-symbolic name (~> (bitvector depth) (bitvector width)))))
              #:with zero-ctor #'(if (array-representation-vector)
