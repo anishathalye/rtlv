@@ -78,9 +78,13 @@
            [(define (fields _)
               (list 'init.name 'member.external-name ...))
             (define (get-field x field-name)
-              (case field-name
-                [(init.name) (init-getter x)]
-                [(member.external-name) (getter x)] ...))
+              (define v
+                (case field-name
+                  [(init.name) (init-getter x)]
+                  [(member.external-name) (getter x)] ...))
+              (if (void? v)
+                  (!error "get-field: no such field: " field-name)
+                  v))
             (define (map-fields x f)
               (datatype-name
                (f 'init.name (init-getter x))
