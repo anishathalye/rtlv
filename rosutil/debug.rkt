@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require racket/list racket/match racket/contract
+(require racket/list racket/match racket/contract racket/function
+         (for-syntax racket/base syntax/parse)
          (only-in rosette bv? expression constant symbolics union)
          (only-in rosette/base/core/term type-deconstruct get-type typed?))
 
@@ -39,54 +40,56 @@
               (lambda (v xs) (+ 1 (apply max xs)))))
 
 (define (value-fold val leaf node)
-  (define (rec children)
-    (for/list ([child (in-list children)])
-      (value-fold child leaf node)))
-  ; mirrors the structure used in render-value/snip
-  ; https://github.com/emina/rosette/blob/master/rosette/lib/value-browser.rkt
-  (match val
-    [(constant id type) (leaf val)]
-    [(union gvs)
-     (node val
-           (for/fold ([acc '()]
-                      #:result (reverse acc))
-                     ([child (in-list gvs)])
-             (define condition (car child))
-             (define value (cdr child))
-             (cons (value-fold value leaf node) (cons (value-fold condition leaf node) acc))))]
-    [(expression op child ...)
-     (node val (rec child))]
-    [(list child ...)
-     (node val (rec child))]
-    [(vector child ...)
-     (node val (rec child))]
-    [(? box?)
-     (node val (list (value-fold (unbox val) leaf node)))]
-    [(cons a b)
-     (node val (list (value-fold a leaf node)
-                     (value-fold b leaf node)))]
-    [(? integer?) (leaf val)]
-    [(? real?) (leaf val)]
-    [(? boolean?) (leaf val)]
-    [(? typed?)
-     (define t (get-type val))
-     (match (type-deconstruct t val)
-       [(list (== val))
-        ;; typed value
-        (match val
-          [(? bv?) (leaf val)]
-          [(? procedure?) (leaf val)]
-          [_
-           ;; this should be a dead code in principle
-           (leaf val)]
-          [vs
-           (node val (rec vs))])])]
-    ;; a struct could have prop:procedure, so this test should
-    ;; follow the struct test
-    [(? procedure?) (leaf val)]
-    [_
-     ; other
-     (leaf val)]))
+  (define/internally-memoizing (fold-memoized val)
+    (define (rec children)
+      (for/list ([child (in-list children)])
+        (fold-memoized child)))
+    ; mirrors the structure used in render-value/snip
+    ; https://github.com/emina/rosette/blob/master/rosette/lib/value-browser.rkt
+    (match val
+      [(constant id type) (leaf val)]
+      [(union gvs)
+       (node val
+             (for/fold ([acc '()]
+                        #:result (reverse acc))
+                       ([child (in-list gvs)])
+               (define condition (car child))
+               (define value (cdr child))
+               (cons (value-fold value leaf node) (cons (value-fold condition leaf node) acc))))]
+      [(expression op child ...)
+       (node val (rec child))]
+      [(list child ...)
+       (node val (rec child))]
+      [(vector child ...)
+       (node val (rec child))]
+      [(? box?)
+       (node val (list (value-fold (unbox val) leaf node)))]
+      [(cons a b)
+       (node val (list (value-fold a leaf node)
+                       (value-fold b leaf node)))]
+      [(? integer?) (leaf val)]
+      [(? real?) (leaf val)]
+      [(? boolean?) (leaf val)]
+      [(? typed?)
+       (define t (get-type val))
+       (match (type-deconstruct t val)
+         [(list (== val))
+          ;; typed value
+          (match val
+            [(? bv?) (leaf val)]
+            [(? procedure?) (leaf val)]
+            [_
+             ;; this should be a dead code in principle
+             (leaf val)]
+            [vs
+             (node val (rec vs))])])]
+      ;; a struct could have prop:procedure, so this test should
+      ;; follow the struct test
+      [(? procedure?) (leaf val)]
+      [_
+       ; other
+       (leaf val)]))
+  (fold-memoized val))
 
 ; finds suspicously large terms among the elements of a module's state
 ;
@@ -111,3 +114,21 @@
   (define large-term-count
     (length (filter (lambda (n) (>= n threshold)) term-depths)))
   large-term-count)
+
+; we are not reusing the yosys/memoize stuff because that has a global
+; memoization context (which makes sense for the Yosys stuff, because we
+; want a global context where we do inter-procedural memoization
+(define-syntax (define/internally-memoizing stx)
+  (syntax-parse stx
+    [(_ (name:id arg:id) body ...)
+     #'(define (name arg)
+         (define memo-table (make-hasheq))
+         (define (name arg [use-memo-table #t])
+           (if use-memo-table
+               (if (hash-has-key? memo-table arg)
+                   (hash-ref memo-table arg)
+                   (let ([value (name arg #f)])
+                     (hash-set! memo-table arg value)
+                     value))
+               (let () body ...)))
+         (name arg))]))

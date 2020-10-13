@@ -39,6 +39,15 @@
   ;    {[(= 2 n) b] [(! (= 2 n)) (bv #b00010 5)]})
   (check-equal? (value-size v) (+ 1 (* 3 (+ 1 3 1 4 1)))))
 
+(test-case "value-size: large term"
+  (define-symbolic* x integer?)
+  (define v
+    (let rec ([v x] [n 100])
+      (if (zero? n) v (rec (+ v v) (sub1 n)))))
+  ; this doesn't explicitly measure performance, but this would take
+  ; longer than the age of the universe without memoization
+  (check-equal? (value-size v) (sub1 (expt 2 101))))
+
 (test-case "value-depth: non-symbolic"
   (check-equal? (value-depth #t) 0)
   (check-equal? (value-depth '(1 2)) 1)
@@ -74,6 +83,16 @@
   ;    {[(= 1 n) b] [(! (= 1 n)) n]}
   ;    {[(= 2 n) b] [(! (= 2 n)) (bv #b00010 5)]})
   (check-equal? (value-depth v) 4))
+
+(test-case "value-depth: large term"
+  (define-symbolic* x integer?)
+  (define v
+    (let rec ([v x] [n 100])
+      (if (zero? n) v (rec (+ v v) (sub1 n)))))
+  ; this doesn't explicitly measure performance, but this would take
+  ; longer than the age of the universe without memoization
+  (check-equal? (value-depth v) 100))
+
 
 (test-case "find-large-terms"
   (define-symbolic* x (bitvector 8))
