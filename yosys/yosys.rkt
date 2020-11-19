@@ -91,7 +91,7 @@
                (f 'member.external-name (getter x)) ...))]
            #:transparent)
          (define (show x port mode)
-           (let ([include? (print-filter)])
+           (let ([include? (field-filter)])
              (cond
                [(boolean? mode)
                 ; write or display

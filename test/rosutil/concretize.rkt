@@ -39,30 +39,32 @@
   (define t2 (bveq (bv 0 8) (concat (bv -1 4) (extract 3 0 x))))
   (check-pred unsat? (concrete t2)))
 
-(test-case "concretize-fields"
+(struct foo (bar baz) #:transparent
+  #:methods gen:yosys-module
+  [(define (fields _) '(bar baz))
+   (define (get-field x s)
+     (case s
+       [(bar) (foo-bar x)]
+       [(baz) (foo-baz x)]))
+   (define (map-fields x f)
+     (foo (f 'bar (foo-bar x))
+          (f 'baz (foo-baz x))))])
+
+(test-case "concretize-fields: subset"
   (define-symbolic* x (bitvector 8))
-  (struct foo (bar baz) #:transparent)
   (define f (foo (bveq (bv -1 32) (concat (bv 0 24) x))
                  (not (bveq (bv -1 32) (concat (bv 0 24) x)))))
-  (define f* (concretize-fields foo f (bar)))
+  (define f*
+    (!parameterize ([field-filter "bar"])
+      (concretize-fields f)))
   (check-eq? (foo-bar f*) #f)
   (check-not-eq? (foo-baz f*) #t))
 
-(test-case "concretize-all-fields"
+(test-case "concretize-fields: all"
   (define-symbolic* x (bitvector 8))
-  (struct foo (bar baz) #:transparent
-    #:methods gen:yosys-module
-    [(define (fields _) '(bar baz))
-     (define (get-field x s)
-       (case s
-         [(bar) (foo-bar x)]
-         [(baz) (foo-baz x)]))
-     (define (map-fields x f)
-       (foo (f 'bar (foo-bar x))
-            (f 'baz (foo-baz x))))])
   (define f (foo (bveq (bv -1 32) (concat (bv 0 24) x))
                  (not (bveq (bv -1 32) (concat (bv 0 24) x)))))
-  (define f* (concretize-all-fields f))
+  (define f* (concretize-fields f))
   (check-eq? (foo-bar f*) #f)
   (check-eq? (foo-baz f*) #t))
 

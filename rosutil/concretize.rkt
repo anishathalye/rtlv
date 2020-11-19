@@ -6,14 +6,13 @@
          (for-syntax racket/base syntax/parse racket/syntax))
 
 (provide
- concretize-fields
  (contract-out
   [concrete (-> any/c
                 @solution?)]
   [concretize (->* (any/c)
                    (#:error-on-failure boolean?)
                    any)]
-  [concretize-all-fields (-> yosys-module?
+  [concretize-fields (-> yosys-module?
                              yosys-module?)]
   [all-values (->i ([term any/c])
                    (#:limit [limit (or/c boolean? natural-number/c)])
@@ -59,21 +58,11 @@
          (values term-concrete res)
          (values term res))]))
 
-(define-syntax (concretize-fields stx)
-  (syntax-parse stx
-    [(_ struct-id:id struct-elem:expr (field-name:id ...))
-     #:with (getter-name ...) (for/list ([field-name (syntax->list #'(field-name ...))])
-                                (format-id stx "~a-~a" (syntax-e #'struct-id) (syntax-e field-name)))
-     #'(let ()
-         (define struct-v struct-elem)
-         (struct-copy
-          struct-id
-          struct-v
-          [field-name (concretize (getter-name struct-v))] ...))]))
-
-(define (concretize-all-fields state)
-  (for/struct (v state)
-    (concretize v)))
+(define (concretize-fields state)
+  (for/struct [(n v) state]
+    (if ((field-filter) n)
+        (concretize v)
+        v)))
 
 (define (all-values term #:limit [limit #f])
   (define vars (@symbolics term))

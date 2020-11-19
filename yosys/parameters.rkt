@@ -5,7 +5,7 @@
 (provide array-representation-vector
          overapproximate-symbolic-store-threshold
          overapproximate-symbolic-load-threshold
-         print-filter
+         field-filter
          (contract-out
           [filter/not
            (-> filter/c
@@ -59,7 +59,7 @@
 (define filter/c
   (or/c #f string? regexp? (-> symbol? any)))
 
-(define (to-print-filter v)
+(define (to-field-filter v)
   (cond
     [(not v) (lambda (s) #t)]
     [(string? v) (lambda (s) (string-contains? (symbol->string s) v))]
@@ -67,11 +67,11 @@
     [else v]))
 
 (define (filter/not filter)
-  (define filter-function (to-print-filter filter))
+  (define filter-function (to-field-filter filter))
   (lambda (s) (not (filter-function s))))
 
 (define (filter/or . filters)
-  (define filter-functions (map to-print-filter filters))
+  (define filter-functions (map to-field-filter filters))
   (lambda (s)
     (for/or ([fn (in-list filter-functions)])
       (fn s))))
@@ -81,14 +81,14 @@
 ; string?: to require the string representation of the symbol contains a given substring
 ; regexp?: to match the string representation of the symbol
 ; symbol? -> any: filter function
-(define print-filter
+(define field-filter
   (make-parameter (lambda (s) #t)
                   (lambda (v)
                     (unless (or (not v)
                                 (string? v)
                                 (regexp? v)
                                 ((procedure-arity-includes/c 1) v))
-                      (raise-argument-error 'print-filter
+                      (raise-argument-error 'field-filter
                                             "(or/c #f string? regexp? (procedure-arity-includes/c 1))"
                                             v))
-                    (to-print-filter v))))
+                    (to-field-filter v))))
