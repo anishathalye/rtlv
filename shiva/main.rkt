@@ -1,6 +1,6 @@
 #lang racket/base
 
-(require racket/list racket/format racket/contract racket/match racket/set racket/function
+(require racket/bool racket/list racket/format racket/contract racket/match racket/set racket/function
          syntax/parse/define
          yosys
          (prefix-in @ (combine-in rosette/safe rosutil))
@@ -144,13 +144,23 @@
   (define statics (or (hints 'statics) '()))
   (unless (verify-statics s0-with-inv step statics)
     (error 'verify-deterministic-start "failed to prove statics"))
-  (define s0 (update-field s0-with-inv reset (if (eq? reset-active 'low) #f #t)))
-  (define allowed-dependencies (list->weak-seteq (static-values statics s0)))
-  (define sn s0)
+  (define allowed-dependencies (list->weak-seteq (static-values statics s0-with-inv)))
+  (define sn s0-with-inv)
   (define verified #f)
   (define+time (_ total-time)
     (for ([cycle (in-naturals)])
       (printf "cycle ~a~n" cycle)
+
+      (define current-inputs
+        (for/list ([i (cons reset inputs)]) ; append reset just in case it's not present
+          (cond
+            [(pair? i) i] ; pre-set value
+            [(eq? i reset) (cons i (if (xor (zero? cycle) (eq? reset-active 'low)) #t #f))] ; special-case reset
+            [else ; symbol
+             (define s (@fresh-symbolic i (@type-of (get-field sn i))))
+             (set-add! allowed-dependencies s)
+             (cons i s)])))
+      (set! sn (update-fields sn current-inputs))
 
       (define+time (any-hints hint-time)
         (define this-hint (hints 'general cycle sn))
@@ -252,16 +262,8 @@
           [(full) (printf "  failed: output ~a not deterministic: ~v~n" name value)]))
       #:break any-outputs-failed
 
-      (define current-inputs
-        (for/list ([i (cons reset inputs)]) ; append reset just in case it's not present
-          (cond
-            [(pair? i) i] ; pre-set value
-            [(eq? i reset) (cons i (if (eq? reset-active 'low) #t #f))] ; special-case reset
-            [else ; symbol
-             (define s (@fresh-symbolic i (@type-of (get-field sn i))))
-             (set-add! allowed-dependencies s)
-             (cons i s)])))
-      (set! sn (update-fields sn+1 current-inputs))))
+      (set! sn sn+1)))
+
   (define t (~r (/ total-time 1000) #:precision 1))
   (if verified
       (printf "finished in ~as~n" t)
