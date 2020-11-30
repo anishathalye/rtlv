@@ -1,7 +1,10 @@
 #lang racket/base
 
-(require rackunit
-         yosys/generic)
+(require
+ "verilog/counter.rkt"
+ yosys/generic
+ (prefix-in @ rosette/safe)
+ racket/function racket/port rackunit)
 
 (struct person (name age) #:transparent
   #:methods gen:yosys-module
@@ -10,6 +13,8 @@
      (case s
        [(name) (person-name p)]
        [(age) (person-age p)]))
+   (define (field-type p s)
+     (error "not implemented"))
    (define (map-fields p f)
      (person (f 'name (person-name p))
              (f 'age (person-age p))))])
@@ -36,3 +41,17 @@
   (check-equal?
    (update-field p 'name "Daniel")
    (person "Daniel" 11)))
+
+(test-case "show-diff"
+  (define s0 (new-zeroed-counter_s))
+  (define s1 (update-field s0 'count (@bv 3 8)))
+  (define res (with-output-to-string (thunk (show-diff s0 s1))))
+  (define expected
+    #<<EOS
+{
+  count: - (bv #x00 8)
+         + (bv #x03 8)
+}
+EOS
+)
+  (check-equal? res expected))

@@ -17,17 +17,20 @@
 
 (begin-for-syntax
   (define-splicing-syntax-class yosys-type
-    #:attributes (show ctor zero-ctor)
+    #:attributes (show type-descriptor ctor zero-ctor)
     (pattern (~datum Bool)
              #:with show #'show-boolean
+             #:with type-descriptor #''boolean
              #:with ctor #'(lambda (name) (fresh-symbolic name boolean?))
              #:with zero-ctor #'#f)
     (pattern ((~datum _) (~datum BitVec) num:nat)
              #:with show #'show-bitvector
+             #:with type-descriptor #''(bitvector num)
              #:with ctor #'(lambda (name) (fresh-symbolic name (bitvector num)))
              #:with zero-ctor #'(bv 0 num))
     (pattern ((~datum Array) ((~datum _) (~datum BitVec) depth:nat) ((~datum _) (~datum BitVec) width:nat))
              #:with show #'show-array
+             #:with type-descriptor #''(array depth width)
              #:with ctor #'(lambda (name)
                              (if (array-representation-vector)
                                  ; vector representation
@@ -43,9 +46,10 @@
                                     (lambda (addr) (bv 0 width)))))
 
   (define-splicing-syntax-class yosys-member
-    #:attributes (external-name name show ctor zero-ctor)
+    #:attributes (external-name name show type-descriptor ctor zero-ctor)
     (pattern (~seq (name:id type:yosys-type) external-name:id)
              #:with show #'type.show
+             #:with type-descriptor #'type.type-descriptor
              #:with ctor #'(type.ctor 'external-name)
              #:with zero-ctor #'type.zero-ctor))
 
@@ -82,6 +86,14 @@
                 (case field-name
                   [(init.name) (init-getter x)]
                   [(member.external-name) (getter x)] ...))
+              (if (void? v)
+                  (!error "get-field: no such field: " field-name)
+                  v))
+            (define (field-type x field-name)
+              (define v
+                (case field-name
+                  [(init.name) 'boolean]
+                  [(member.external-name) member.type-descriptor] ...))
               (if (void? v)
                   (!error "get-field: no such field: " field-name)
                   v))
