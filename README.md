@@ -1,4 +1,4 @@
-# rtl [[![Build Status](https://travis-ci.com/anishathalye/rtl.svg?branch=master)](https://travis-ci.com/anishathalye/rtl)]
+# rtl [![Build Status](https://github.com/anishathalye/rtl/workflows/CI/badge.svg)](https://github.com/anishathalye/rtl/actions?query=workflow%3ACI)
 
 Tools for reasoning about circuits in [Rosette]/[Racket].
 
