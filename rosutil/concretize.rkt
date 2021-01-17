@@ -46,9 +46,11 @@
   (cond
     [(empty? vars) (values term (@unsat))]
     [else
-     (define model (@solve #t))
-     (unless (@sat? model)
-       (error "can't find single concrete state"))
+     ;; we don't use the assertion store / assume the assertion store
+     ;; is empty, so an empty model will do (solution to (solve #t)), but this
+     ;; avoids the solver call. even if this assumption is wrong, this
+     ;; will not result in unsoundness (we might just fail to concretize)
+     (define model (@sat))
      (define term-concrete (@evaluate term (@complete-solution model vars)))
      (define res
        (@verify
