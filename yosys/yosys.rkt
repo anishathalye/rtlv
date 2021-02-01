@@ -5,7 +5,7 @@
  syntax/parse/define
  ; we need to be careful of what we import for runtime, because
  ; whatever we use needs to be compatible with Rosette
- "memoize.rkt" "parameters.rkt" "generic.rkt"
+ "memoize.rkt" "parameters.rkt" "generic.rkt" "meta.rkt"
  rosutil
  (prefix-in ! racket/base))
 
@@ -176,33 +176,39 @@
            body)
          (provide name))]
     ; transition function: treated specially
-    ; case 1: when module is purely combinatorial
+    ; case 1: when module is purely combinational
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         (~datum true))
      #:with internal-copy-name (format-id stx "internal-copy-~a" #'type)
+     #:with step (format-id stx "step")
      #'(begin
          (define (name state)
            (new-memoization-context
             (internal-copy-name state)))
-         (provide name))]
+         (define (step state) (name state))
+         (provide name step))]
     ; case 2: when state has a single field
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum =) e (field:id (~datum next_state))))
      #:with internal-copy-name (format-id stx "internal-copy-~a" #'type)
+     #:with step (format-id stx "step")
      #'(begin
          (define (name state)
            (new-memoization-context
             (internal-copy-name state [field e])))
-         (provide name))]
+         (define (step state) (name state))
+         (provide name step))]
     ; case 3: when state has multiple fields
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum and) ((~datum =) e (field:id (~datum next_state))) ...))
      #:with internal-copy-name (format-id stx "internal-copy-~a" #'type)
+     #:with step (format-id stx "step")
      #'(begin
          (define (name state)
            (new-memoization-context
             (internal-copy-name state [field e] ...)))
-         (provide name))]))
+         (define (step state) (name state))
+         (provide name step))]))
 
 ; this appears at the top of the extraction, so we can put global
 ; top-level definitions here
@@ -276,8 +282,8 @@
       (if (empty? forms)
           (reverse acc)
           (rec (rest forms)
-               (if ((tag-match? tag-begin) (car forms))
-                   (cons (take-upto (tag-match? tag-end) forms) acc)
+               (if ((tag-match? tag-begin) (first forms))
+                   (cons (if tag-end (take-upto (tag-match? tag-end) forms) (first forms)) acc)
                    acc)))))
 
   (define (collect-getters tag stx)
@@ -286,13 +292,51 @@
             [getter (second (syntax->list (last el)))])
         #`(cons '#,name #,getter))))
 
+  (define (tagged-except-clocks tag stx)
+    (define (get-name decl-stx) (syntax-e (second (syntax->list decl-stx))))
+    (let ([clock-names (list->set (map get-name (filter-tagged #'yosys-smt2-clock #f stx)))])
+      (filter (lambda (decl-stx) (not (set-member? clock-names (get-name decl-stx))))
+              (filter-tagged tag #f stx))))
+
+  (define (gen-struct tag name stx)
+    (define fields (tagged-except-clocks tag stx))
+    (define struct-name (format-id stx name))
+    (define new-symbolic-name (format-id stx "new-symbolic-~a" name))
+    (define getters-name (format-id stx "~a-getters" name))
+    #`(begin
+        (struct #,struct-name #,(for/list ([f fields]) (second (syntax->list f)))
+          #:transparent)
+        (define #,getters-name
+          (list
+           #,@(for/list ([f fields])
+                (let ([getter-name (format-id stx "~a-~a" struct-name (syntax-e (second (syntax->list f))))])
+                      #`(cons '#,getter-name #,getter-name)))))
+        (define (#,new-symbolic-name)
+          (#,struct-name #,@(for/list ([f fields])
+                              (let* ([name (syntax-e (second (syntax->list f)))]
+                                     [w (syntax-e (third (syntax->list f)))]
+                                     [type (if (equal? w 1) #'boolean? #`(bitvector #,w))])
+                                #`(fresh-symbolic '#,name #,type)))))
+        (provide (struct-out #,struct-name) #,getters-name #,new-symbolic-name)))
+
+  (define (gen-input-setter module-name stx)
+    (define struct-name (format-id stx "~a_s" module-name))
+    (define with-input (format-id stx "with-input"))
+    #`(begin
+        (define (#,with-input state input)
+          (!struct-copy
+           #,struct-name
+           state
+           #,@(for/list ([inp (tagged-except-clocks #'yosys-smt2-input stx)])
+                (let* ([name (syntax-e (second (syntax->list inp)))]
+                       [getter (format-id stx "input-~a" name)])
+                  #`(#,name (#,getter input))))))
+        (provide #,with-input)))
+
   (define (yosys-top stx)
     (syntax-parse stx
       [(_ form ...)
-       (define inputs (format-id stx "inputs"))
-       (define outputs (format-id stx "outputs"))
-       (define registers (format-id stx "registers"))
-       (define memories (format-id stx "memories"))
+       (define module-name (syntax-e (second (syntax->list (first (filter-tagged #'yosys-smt2-module #f stx))))))
        #`(form
           ...
           (begin
@@ -301,4 +345,19 @@
             (define outputs (list #,@(collect-getters #'yosys-smt2-output stx)))
             (define registers (list #,@(collect-getters #'yosys-smt2-register stx)))
             (define memories (list #,@(collect-getters #'yosys-smt2-memory stx)))
-            ))])))
+            #,(gen-struct #'yosys-smt2-input "input" stx)
+            #,(gen-struct #'yosys-smt2-output "output" stx)
+            #,(gen-input-setter module-name stx)
+            (define (get-output state)
+              (apply #,(format-id stx "output") (map (lambda (o) ((cdr o) state)) outputs)))
+            (provide get-output)
+            ;; packaging up this stuff nicely together
+            (define metadata (meta
+                              #,(format-id stx "step")
+                              #,(format-id stx "input")
+                              #,(format-id stx "input-getters")
+                              #,(format-id stx "with-input")
+                              #,(format-id stx "output")
+                              #,(format-id stx "output-getters")
+                              get-output))
+            (provide metadata)))])))

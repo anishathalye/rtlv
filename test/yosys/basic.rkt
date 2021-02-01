@@ -2,7 +2,7 @@
 
 (require rackunit
          "verilog/counter.rkt"
-         (except-in "verilog/print-test.rkt" inputs outputs registers memories)
+         (only-in "verilog/print-test.rkt" new-zeroed-print_test_s)
          yosys
          (only-in racket/base string-append parameterize regexp-match))
 
