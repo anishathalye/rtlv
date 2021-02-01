@@ -13,7 +13,8 @@
  declare-datatype define-fun
  yosys-smt2-stdt yosys-smt2-module yosys-smt2-topmod
  yosys-smt2-clock yosys-smt2-input yosys-smt2-output
- yosys-smt2-register yosys-smt2-memory)
+ yosys-smt2-register yosys-smt2-memory
+ (for-syntax yosys-top))
 
 (begin-for-syntax
   (define-splicing-syntax-class yosys-type
@@ -166,16 +167,6 @@
               #'(update-name (new-zeroed-name) [field value] /...)]))
          (provide make-name))]))
 
-(define define-fun-hooks '())
-
-(define (add-define-fun-hook hook)
-  (set! define-fun-hooks (cons hook define-fun-hooks)))
-
-(define (trigger-hooks name fn)
-  (!for ([hook define-fun-hooks])
-        (hook name fn))
-  (set! define-fun-hooks '()))
-
 (define-syntax (define-fun stx)
   (syntax-parse stx
     ; regular case
@@ -183,8 +174,7 @@
      #'(begin
          (define/memoize1 (name input)
            body)
-         (provide name)
-         (trigger-hooks 'name name))]
+         (provide name))]
     ; transition function: treated specially
     ; case 1: when module is purely combinatorial
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
@@ -194,8 +184,7 @@
          (define (name state)
            (new-memoization-context
             (internal-copy-name state)))
-         (provide name)
-         (trigger-hooks 'name name))]
+         (provide name))]
     ; case 2: when state has a single field
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum =) e (field:id (~datum next_state))))
@@ -204,8 +193,7 @@
          (define (name state)
            (new-memoization-context
             (internal-copy-name state [field e])))
-         (provide name)
-         (trigger-hooks 'name name))]
+         (provide name))]
     ; case 3: when state has multiple fields
     [(_ name:id ((state:id type:id) ((~datum next_state) next-type:id)) (~datum Bool)
         ((~datum and) ((~datum =) e (field:id (~datum next_state))) ...))
@@ -214,66 +202,33 @@
          (define (name state)
            (new-memoization-context
             (internal-copy-name state [field e] ...)))
-         (provide name)
-         (trigger-hooks 'name name))]))
+         (provide name))]))
 
 ; this appears at the top of the extraction, so we can put global
 ; top-level definitions here
-(define-syntax (yosys-smt2-stdt stx)
-  (syntax-parse stx
-    [(_)
-     #:with inputs (format-id stx "inputs")
-     #:with outputs (format-id stx "outputs")
-     #:with registers (format-id stx "registers")
-     #:with memories (format-id stx "memories")
-     #'(begin
-         (define inputs '())
-         (provide inputs)
-         (define outputs '())
-         (provide outputs)
-         (define registers '())
-         (provide registers)
-         (define memories '())
-         (provide memories))]))
+(define-simple-macro (yosys-smt2-stdt)
+  (begin))
 
-; no interpretation yet
 (define-simple-macro (yosys-smt2-module name:id)
-  (void))
+  (begin))
 
-; no interpretation yet
 (define-simple-macro (yosys-smt2-topmod name:id)
-  (void))
+  (begin))
 
-; no interpretation yet
 (define-simple-macro (yosys-smt2-clock name:id 'edge:id)
-  (void))
+  (begin))
 
-(define-simple-macro (make-appender lst)
-  (lambda (name fn) (set! lst (cons (cons name fn) lst))))
+(define-simple-macro (yosys-smt2-input name:id width:nat)
+  (begin))
 
-(define-syntax (yosys-smt2-input stx)
-  (syntax-parse stx
-    [(_ name:id width:nat)
-     #:with inputs (format-id stx "inputs")
-     #'(add-define-fun-hook (make-appender inputs))]))
+(define-simple-macro (yosys-smt2-output name:id width:nat)
+  (begin))
 
-(define-syntax (yosys-smt2-output stx)
-  (syntax-parse stx
-    [(_ name:id width:nat)
-     #:with outputs (format-id stx "outputs")
-     #'(add-define-fun-hook (make-appender outputs))]))
+(define-simple-macro (yosys-smt2-register name:id width:nat)
+  (begin))
 
-(define-syntax (yosys-smt2-register stx)
-  (syntax-parse stx
-    [(_ name:id width:nat)
-     #:with registers (format-id stx "registers")
-     #'(add-define-fun-hook (make-appender registers))]))
-
-(define-syntax (yosys-smt2-memory stx)
-  (syntax-parse stx
-    [(_ name:id bits:nat width:nat read-ports:nat write-ports:nat 'sync:id)
-     #:with memories (format-id stx "memories")
-     #'(add-define-fun-hook (make-appender memories))]))
+(define-simple-macro (yosys-smt2-memory name:id bits:nat width:nat read-ports:nat write-ports:nat 'sync:id)
+  (begin))
 
 (define (show-recur x port mode)
   (case mode
@@ -300,3 +255,50 @@
          (begin
            (fprintf port " ")
            (print x port mode)))]))
+
+(begin-for-syntax
+  (define (take-upto p l)
+    (let rec ([l l]
+              [acc '()])
+      (if (empty? l)
+          (reverse acc)
+          (let ([h (first l)])
+            (if (p h)
+                (reverse (cons h acc))
+                (rec (rest l) (cons h acc)))))))
+
+  (define (filter-tagged tag-begin tag-end stx)
+    (define ((tag-match? tag) form)
+      (define d (syntax-e form))
+      (and (pair? d) (identifier? (first d)) (free-identifier=? (first d) tag)))
+    (let rec ([forms (syntax->list stx)]
+              [acc '()])
+      (if (empty? forms)
+          (reverse acc)
+          (rec (rest forms)
+               (if ((tag-match? tag-begin) (car forms))
+                   (cons (take-upto (tag-match? tag-end) forms) acc)
+                   acc)))))
+
+  (define (collect-getters tag stx)
+    (for/list ([el (filter-tagged tag #'define-fun stx)])
+      (let ([name (second (syntax->list (first el)))]
+            [getter (second (syntax->list (last el)))])
+        #`(cons '#,name #,getter))))
+
+  (define (yosys-top stx)
+    (syntax-parse stx
+      [(_ form ...)
+       (define inputs (format-id stx "inputs"))
+       (define outputs (format-id stx "outputs"))
+       (define registers (format-id stx "registers"))
+       (define memories (format-id stx "memories"))
+       #`(form
+          ...
+          (begin
+            (provide inputs outputs registers memories)
+            (define inputs (list #,@(collect-getters #'yosys-smt2-input stx)))
+            (define outputs (list #,@(collect-getters #'yosys-smt2-output stx)))
+            (define registers (list #,@(collect-getters #'yosys-smt2-register stx)))
+            (define memories (list #,@(collect-getters #'yosys-smt2-memory stx)))
+            ))])))

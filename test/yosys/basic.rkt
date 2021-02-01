@@ -2,7 +2,7 @@
 
 (require rackunit
          "verilog/counter.rkt"
-         "verilog/print-test.rkt"
+         (except-in "verilog/print-test.rkt" inputs outputs registers memories)
          yosys
          (only-in racket/base string-append parameterize regexp-match))
 
@@ -36,9 +36,9 @@
 (test-case "inputs/outputs/registers"
   (check-equal? (length inputs) 3)
   (check-equal? (length outputs) 1)
-  (check-equal? (first outputs) (cons '|counter_n count| |counter_n count|))
+  (check-equal? (first outputs) (cons 'count |counter_n count|))
   (check-equal? (length registers) 1)
-  (check-equal? (first registers) (cons '|counter_n count| |counter_n count|)))
+  (check-equal? (first registers) (cons 'count |counter_n count|)))
 
 (test-case "display/write"
   (define s0 (new-zeroed-print_test_s))

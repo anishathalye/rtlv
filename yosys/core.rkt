@@ -1,7 +1,8 @@
 #lang racket/base
 
 (require (prefix-in @ rosette/safe)
-         syntax/parse/define)
+         (for-syntax racket/base syntax/parse racket/syntax racket/list)
+         (only-in "yosys.rkt" yosys-top))
 
 (provide (rename-out
           [$#%module-begin #%module-begin])
@@ -12,9 +13,9 @@
           [@#%datum #%datum]
           [@#%top #%top]))
 
-(define-simple-macro ($#%module-begin form ...)
-  (@#%module-begin
-   (module configure-runtime racket/base
-     (require yosys/lang/configure-runtime)
-     (configure-runtime!))
-   form ...))
+(define-syntax ($#%module-begin stx)
+  #`(@#%module-begin
+     (module configure-runtime racket/base
+       (require yosys/lang/configure-runtime)
+       (configure-runtime!))
+     #,@(yosys-top stx)))
