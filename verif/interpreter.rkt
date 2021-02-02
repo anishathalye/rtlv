@@ -1,15 +1,20 @@
 #lang rosette/safe
 
-(require (only-in racket error symbol? string?)
+(require (only-in racket error [symbol? racket/symbol?])
          rosette/lib/destruct
          syntax/parse/define
          yosys/meta)
 
 (provide
+ basic-value?
  make-interpreter step run closure
  make-assoc assoc-contains assoc-lookup assoc-remove assoc-extend assoc-extend*
  (struct-out state)
  (struct-out globals))
+
+(define (symbol? v)
+  (for/all ([v v])
+    (racket/symbol? v)))
 
 ;; Expressions
 
@@ -22,7 +27,7 @@
   (symbol? expr))
 
 (define (literal? expr)
-  (or (boolean? expr) (integer? expr) (string? expr)))
+  (or (boolean? expr) (integer? expr)))
 
 (define (lambda? expr)
   (equal? (tag expr) 'lambda))
@@ -91,19 +96,40 @@
 (define (app-args expr)
   (cdr expr))
 
+(define (value? expr)
+  (equal? (tag expr) 'value))
+
+(define (value-get expr)
+  (second expr))
+
 ;; Values
 ;;
 ;; value ::=
 ;; | void?
 ;; | boolean?
 ;; | integer?
-;; | string?
 ;; | bv?
 ;; | null?
 ;; | cons?
 ;; | closure?
 ;; | builtin?
 ;; | circuit-op?
+;; | input?
+;; | output?
+
+;; checks if v is a value, but doesn't include input/output (because
+;; that's slightly more annoying, those structs are supplied via
+;; metadata)
+(define (basic-value? v)
+  (or (void? v)
+      (boolean? v)
+      (integer? v)
+      (bv? v)
+      (null? v)
+      (and (cons? v) (basic-value? (car v)) (basic-value? (cdr v)))
+      (closure? v)
+      (builtin? v)
+      (circuit-op? v)))
 
 (struct closure
   (expr environment)
@@ -411,6 +437,12 @@
     ;; value literal?
     [(literal? expr)
      (cont expr globals)]
+    ;; injected value?
+    [(value? expr)
+     (let ([val (value-get expr)])
+       (unless (basic-value? val)
+         (error 'step "not a basic value: ~v" val))
+       (cont (value-get expr) globals))]
     ;; lambda?
     [(lambda? expr)
      (cont (closure expr env) globals)]
@@ -452,7 +484,7 @@
     [(app? expr)
      (state (app-f expr) env globals (eval-app env #f '() (app-args expr) cont))]
     [else
-     (error 'step "bad expression: ~a" expr)]))
+     (error 'step "bad expression: ~v" expr)]))
 
 (define (show s)
   (format "(state ~v ~v ~v ~v)" (state-control s) (state-environment s) (globals-circuit (state-globals s)) (state-continuation s)))
