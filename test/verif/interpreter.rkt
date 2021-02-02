@@ -27,7 +27,7 @@
   (check-equal? (run (initialize0 '(yield))) (void)))
 
 (test-case "uninterpreted with args, in sequence"
-  (check-equal? (run (initialize0 '(let () 3 4 (hint merge) 5))) 5))
+  (check-equal? (run (initialize0 '(begin 3 4 (hint merge) 5))) 5))
 
 (test-case "parallel let binding, re-binding functions"
   (define prog
@@ -92,7 +92,7 @@
 
 (test-case "add using circuit"
   (define prog
-    '(let ()
+    '(begin
        (out (input #t #t))
        (tick)
        (tick)
@@ -111,7 +111,7 @@
                              (loop-until-wraparound (add1 ctr)))))
                     (make-assoc)))))
   (define prog
-    '(let ()
+    '(begin
        (out (input #t #t))
        (loop-until-wraparound 0)))
   (check-equal? (run (make-interpreter prog globals (new-zeroed-counter_s) metadata)) 255))

@@ -9,7 +9,7 @@
 (test-case "basic"
   (define c0 (new-zeroed-counter_s))
   (define s0 ((interpreter-factory metadata)
-              '(let ()
+              '(begin
                  (inc 10)
                  (get))
               c0))
@@ -19,7 +19,7 @@
   (define c0 (new-zeroed-counter_s))
   (define-symbolic* b boolean?)
   (define s0 ((interpreter-factory metadata)
-              `(let ()
+              `(begin
                  (out (input ,b #t))
                  (tick)
                  (if (not (bvzero? (output-count (in))))
@@ -35,7 +35,7 @@
 (test-case "concrete list input"
   (define c0 (new-zeroed-counter_s))
   (define s0 ((interpreter-factory metadata)
-              '(let ()
+              '(begin
                  (inc-all (list 1 2 3 4))
                  (get))
               c0))
@@ -47,7 +47,7 @@
   (define x (if b 1 2))
   (define inp (list 1 x 1))
   (define s0 ((interpreter-factory metadata)
-              `(let ()
+              `(begin
                  (inc-all (value ,inp))
                  (get))
               c0))

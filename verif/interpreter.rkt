@@ -40,7 +40,7 @@
       ;; body is a single expression, return it
       (car expr)
       ;; body is a sequence, wrap it in sequence
-      `(sequence ,@expr)))
+      `(begin ,@expr)))
 
 (define (lambda-body expr)
   (maybe-wrap-body (cddr expr)))
@@ -78,10 +78,10 @@
 (define (let-body expr)
   (maybe-wrap-body (cddr expr)))
 
-(define (sequence? expr)
-  (equal? (tag expr) 'sequence))
+(define (begin? expr)
+  (equal? (tag expr) 'begin))
 
-(define (sequence-contents expr)
+(define (begin-contents expr)
   (cdr expr))
 
 (define (uninterpreted? expr)
@@ -470,9 +470,9 @@
          [(null? bindings) (state (let-body expr) env globals cont)]
          [else
           (state (cadar bindings) env globals (eval-let env '() (caar bindings) (cdr bindings) (let-body expr) cont))]))]
-    ;; sequence?
-    [(sequence? expr)
-     (let ([contents (sequence-contents expr)])
+    ;; begin?
+    [(begin? expr)
+     (let ([contents (begin-contents expr)])
        (cond
          [(null? contents) (cont (void) globals)]
          [(null? (cdr contents)) (state (car contents) env globals cont)]
