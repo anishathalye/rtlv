@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        racket-version: ['7.5', 'stable']
+        racket-version: ['7.8', 'stable']
         racket-variant: ['regular']
         allow-failure: [false]
         include:
