@@ -7,7 +7,7 @@
 
 (provide
  basic-value?
- make-interpreter step run closure
+ make-interpreter step run show closure
  make-assoc assoc-contains assoc-lookup assoc-remove assoc-extend assoc-extend*
  (struct-out state)
  (struct-out globals))
@@ -487,7 +487,7 @@
      (error 'step "bad expression: ~v" expr)]))
 
 (define (show s)
-  (format "(state ~v ~v ~v ~v)" (state-control s) (state-environment s) (globals-circuit (state-globals s)) (state-continuation s)))
+  (format "(state ~v ~v ~v)" (state-control s) (state-environment s) (state-continuation s)))
 
 (define (run sv #:trace [trace #f])
   (if (state? sv)
