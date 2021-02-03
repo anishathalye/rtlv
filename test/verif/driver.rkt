@@ -15,6 +15,11 @@
               c0))
   (check-equal? (run s0) 10))
 
+(test-case "constant defined in terms of another"
+  (define c0 (new-zeroed-counter_s))
+  (define s0 ((interpreter-factory metadata) 'CONST-5 c0))
+  (check-equal? (run s0) 5))
+
 (test-case "symbolic inputs and symbolic control flow"
   (define c0 (new-zeroed-counter_s))
   (define-symbolic* b boolean?)

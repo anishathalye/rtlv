@@ -27,17 +27,22 @@
            @concat @extract @sign-extend @zero-extend @bitvector->integer @bitvector->natural @integer->bitvector
            @bit @lsb @msb @bvzero? @bvadd1 @bvsub1 @bvsmin @bvumin @bvsmax @bvumax @bvrol @bvror @rotate-left @rotate-right @bitvector->bits @bitvector->bool @bool->bitvector)))
 
-(define-syntax $define
-  (syntax-parser
-    ;; function definition
-    [(_ (function-name:id formals:id ...) body:expr ...+)
-     #'(cons 'function-name
-             (closure '(lambda (formals ...) body ...) (make-assoc)))]
-    ;; value definition
-    [(_ value-name:id body:expr)
-     #'(cons 'value-name (let ([v body])
-                           (if (basic-value? v) v (error 'value-name "must evaluate to a value"))))]))
+(define-syntax-parameter $define
+  (lambda (stx)
+    (raise-syntax-error #f "use of a define outside the top-level" stx)))
 
+(define-syntax (process-defines stx)
+  (syntax-parse stx
+    [(_ global-bindings:id)
+     #'(begin global-bindings)]
+    [(_ global-bindings:id ((~literal $define) value-name:id body:expr) form ...)
+     #'(let* ([value-name body]
+              [global-bindings (assoc-extend global-bindings 'value-name value-name)])
+         (process-defines global-bindings form ...))]
+    [(_ global-bindings:id ((~literal $define) (value-name:id formals:id ...) body:expr ...+) form ...)
+     #'(let* ([value-name (closure '(lambda (formals ...) body ...) (make-assoc))]
+              [global-bindings (assoc-extend global-bindings 'value-name value-name)])
+         (process-defines global-bindings form ...))]))
 
 (define-syntax ($#%module-begin stx)
   (syntax-parse stx
@@ -45,9 +50,8 @@
      #:with interpreter-factory (format-id stx "interpreter-factory")
      #'(#%module-begin
         (define global-bindings
-          (for/fold ([env (make-assoc)])
-                    ([def (list form ...)])
-            (assoc-extend env (car def) (cdr def))))
+          (let ([global-bindings (make-assoc)])
+            (process-defines global-bindings form ...)))
         (define ((interpreter-factory metadata) expr initial-circuit)
           (make-interpreter expr global-bindings initial-circuit metadata))
         (provide interpreter-factory))]))

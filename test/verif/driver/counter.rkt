@@ -1,5 +1,9 @@
 #lang verif/driver
 
+(define CONST-10 10)
+
+(define CONST-5 (quotient CONST-10 2))
+
 (define (ntimes n proc)
   (if (zero? n)
       (void)
