@@ -14,7 +14,7 @@
          void void?
          printf println
          equal?
-         cons car cdr null? list? list
+         cons car cdr null? list? list length reverse
          not
          + - * quotient modulo zero? add1 sub1 abs max min < <= > >= expt integer?
          (filtered-out

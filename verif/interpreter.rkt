@@ -205,7 +205,7 @@
    ;; equality
    equal?
    ;; list
-   cons car cdr null? list? list
+   cons car cdr null? list? list length reverse
    ;; boolean
    not
    ;; integer
