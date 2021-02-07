@@ -6,18 +6,7 @@
  (prefix-in @ rosette/safe)
  racket/function racket/port rackunit)
 
-(struct person (name age) #:transparent
-  #:methods gen:dynamically-addressable
-  [(define (fields p) '(name age))
-   (define (get-field p s)
-     (case s
-       [(name) (person-name p)]
-       [(age) (person-age p)]))
-   (define (field-type p s)
-     (error "not implemented"))
-   (define (map-fields p f)
-     (person (f 'name (person-name p))
-             (f 'age (person-age p))))])
+(dynamically-addressable-struct person ([name 'string] [age 'number]) #:transparent)
 
 (test-case "fields"
   (check-equal? (fields (person "Alice" 23)) '(name age)))

@@ -3,7 +3,8 @@
 (require
  "parameters.rkt"
  racket/generic racket/contract racket/function racket/match racket/format
- (for-syntax racket/base syntax/parse))
+ (for-syntax racket/base syntax/parse racket/syntax)
+ (prefix-in @ rosette/safe))
 
 (provide
  gen:yosys-module yosys-module? yosys-module/c
@@ -16,7 +17,8 @@
   [update-fields (-> dynamically-addressable? (listof (cons/c symbol? any/c)) dynamically-addressable?)]
   [update-field (-> dynamically-addressable? symbol? any/c dynamically-addressable?)]
   [show-diff (-> dynamically-addressable? dynamically-addressable? any)])
- for/struct)
+ for/struct
+ dynamically-addressable-struct)
 
 ;; just a tag
 (define-generics yosys-module)
@@ -65,3 +67,25 @@
          (printf "  ~a: - ~v\n" field-name (get-field self f))
          (printf "  ~a  + ~v\n" (~a "" #:width (string-length field-name)) (get-field other f))])))
   (printf "}"))
+
+(define-syntax (dynamically-addressable-struct stx)
+  (syntax-parse stx
+    [(_ name:id ([field-name:id type-descriptor:expr] ...) struct-option ...)
+     #:with (getter ...) (for/list ([f (syntax->list #'(field-name ...))])
+                           (format-id #'name "~a-~a" #'name f))
+     #'(@struct name (field-name ...) struct-option ...
+                #:methods gen:dynamically-addressable
+                [(define (fields _)
+                   (list 'field-name ...))
+                 (define (get-field x f)
+                   (define v (@case f [(field-name) (getter x)] ...))
+                   (@if (@void? v)
+                        (error 'get-field "no such field: ~a" f)
+                        v))
+                 (define (field-type x f)
+                   (define v (@case f [(field-name) type-descriptor] ...))
+                   (@if (@void? v)
+                        (error 'field-type "no such field: ~a" f)
+                        v))
+                 (define (map-fields x f)
+                   (name (f 'field-name (getter x)) ...))])]))

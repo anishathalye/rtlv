@@ -76,33 +76,12 @@
      #:with /... (quote-syntax ...)
      #'(begin
          ; struct declaration
-         (struct datatype-name (init.name member.external-name ...)
+         (dynamically-addressable-struct
+          datatype-name
+          ([init.name 'boolean] [member.external-name member.type-descriptor] ...)
            #:methods gen:custom-write
            [(define (write-proc x port mode) (show x port mode))]
            #:methods gen:yosys-module []
-           #:methods gen:dynamically-addressable
-           [(define (fields _)
-              (list 'init.name 'member.external-name ...))
-            (define (get-field x field-name)
-              (define v
-                (case field-name
-                  [(init.name) (init-getter x)]
-                  [(member.external-name) (getter x)] ...))
-              (if (void? v)
-                  (!error "get-field: no such field: " field-name)
-                  v))
-            (define (field-type x field-name)
-              (define v
-                (case field-name
-                  [(init.name) 'boolean]
-                  [(member.external-name) member.type-descriptor] ...))
-              (if (void? v)
-                  (!error "get-field: no such field: " field-name)
-                  v))
-            (define (map-fields x f)
-              (datatype-name
-               (f 'init.name (init-getter x))
-               (f 'member.external-name (getter x)) ...))]
            #:transparent)
          (define (show x port mode)
            (let ([include? (field-filter)])
