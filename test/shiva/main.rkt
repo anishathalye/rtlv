@@ -7,7 +7,7 @@
 
 (test-case "with-invariants"
   (@struct mod (x y) #:transparent
-           #:methods gen:yosys-module
+           #:methods gen:dynamically-addressable
            [(define (fields _) '(x y))
             (define (get-field m name)
               (case name

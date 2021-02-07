@@ -7,7 +7,7 @@
  racket/function racket/port rackunit)
 
 (struct person (name age) #:transparent
-  #:methods gen:yosys-module
+  #:methods gen:dynamically-addressable
   [(define (fields p) '(name age))
    (define (get-field p s)
      (case s

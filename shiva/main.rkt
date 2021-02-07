@@ -9,23 +9,23 @@
 (provide
  (contract-out
   [with-invariants (->*
-                    (yosys-module? (-> yosys-module? any))
-                    (yosys-module?)
-                    yosys-module?)]
+                    (dynamically-addressable? (-> dynamically-addressable? any))
+                    (dynamically-addressable?)
+                    dynamically-addressable?)]
   [verify-deterministic-start (->*
-                               ((-> yosys-module?)
-                                #:invariant (-> yosys-module? any)
-                                #:step (-> yosys-module? yosys-module?)
+                               ((-> (and/c yosys-module? dynamically-addressable?))
+                                #:invariant (-> (and/c yosys-module? dynamically-addressable?) any)
+                                #:step (-> (and/c yosys-module? dynamically-addressable?) (and/c yosys-module? dynamically-addressable?))
                                 #:reset symbol?
                                 #:reset-active (or/c 'low 'high)
                                 #:inputs (listof (or/c symbol? (cons/c symbol? wire-constant?)))
-                                #:state-getters (listof (cons/c symbol? (-> yosys-module? any))))
-                               (#:output-getters (listof (cons/c symbol? (-> yosys-module? any)))
+                                #:state-getters (listof (cons/c symbol? (-> (and/c yosys-module? dynamically-addressable?) any))))
+                               (#:output-getters (listof (cons/c symbol? (-> (and/c yosys-module? dynamically-addressable?) any)))
                                 #:hints (->* (symbol?) #:rest any/c any)
                                 #:print-style (or/c 'full 'names 'none)
                                 #:try-verify-after natural-number/c
                                 #:limit (or/c #f natural-number/c)
-                                #:debug (-> natural-number/c yosys-module? (or/c #f @solution?) (or/c #f yosys-module?)))
+                                #:debug (-> natural-number/c (and/c yosys-module? dynamically-addressable?) (or/c #f @solution?) (or/c #f (and/c yosys-module? dynamically-addressable?))))
                                (or/c #f natural-number/c))]))
 
 (define wire-constant?

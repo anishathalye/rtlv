@@ -7,22 +7,26 @@
 
 (provide
  gen:yosys-module yosys-module? yosys-module/c
+ gen:dynamically-addressable dynamically-addressable? dynamically-addressable/c
  (contract-out
-  [fields (-> yosys-module? (listof symbol?))]
-  [field-type (-> yosys-module? symbol? any)]
-  [get-field (-> yosys-module? symbol? any)]
-  [map-fields (-> yosys-module? (-> symbol? any/c any) yosys-module?)]
-  [update-fields (-> yosys-module? (listof (cons/c symbol? any/c)) yosys-module?)]
-  [update-field (-> yosys-module? symbol? any/c yosys-module?)]
-  [show-diff (-> yosys-module? yosys-module? any)])
+  [fields (-> dynamically-addressable? (listof symbol?))]
+  [field-type (-> dynamically-addressable? symbol? any)]
+  [get-field (-> dynamically-addressable? symbol? any)]
+  [map-fields (-> dynamically-addressable? (-> symbol? any/c any) dynamically-addressable?)]
+  [update-fields (-> dynamically-addressable? (listof (cons/c symbol? any/c)) dynamically-addressable?)]
+  [update-field (-> dynamically-addressable? symbol? any/c dynamically-addressable?)]
+  [show-diff (-> dynamically-addressable? dynamically-addressable? any)])
  for/struct)
 
-(define-generics yosys-module
-  [fields yosys-module]
-  [field-type yosys-module field]
-  [get-field yosys-module field]
-  [map-fields yosys-module fn]
-  [update-fields yosys-module assoc]
+;; just a tag
+(define-generics yosys-module)
+
+(define-generics dynamically-addressable
+  [fields dynamically-addressable]
+  [field-type dynamically-addressable field]
+  [get-field dynamically-addressable field]
+  [map-fields dynamically-addressable fn]
+  [update-fields dynamically-addressable assoc]
   #:fallbacks
   [(define/generic gen-map-fields map-fields)
    (define (update-fields x assoc)
@@ -34,7 +38,7 @@
     [(_ [v:id s] body ...)
      #'(for/struct [(_ v) s] body ...)]
     [(_ [(k:id v:id) s] body ...)
-     #:declare s (expr/c #'yosys-module?)
+     #:declare s (expr/c #'dynamically-addressable?)
      #'(map-fields s.c (lambda (k v) body ...))]))
 
 (define (update-field struct-value field-name new-value)

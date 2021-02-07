@@ -12,8 +12,8 @@
   [concretize (->* (any/c)
                    (#:error-on-failure boolean?)
                    any)]
-  [concretize-fields (-> yosys-module?
-                             yosys-module?)]
+  [concretize-fields (-> dynamically-addressable?
+                         dynamically-addressable?)]
   [all-values (->i ([term any/c])
                    (#:limit [limit (or/c boolean? natural-number/c)])
                    [result (limit)

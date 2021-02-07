@@ -79,7 +79,8 @@
          (struct datatype-name (init.name member.external-name ...)
            #:methods gen:custom-write
            [(define (write-proc x port mode) (show x port mode))]
-           #:methods gen:yosys-module
+           #:methods gen:yosys-module []
+           #:methods gen:dynamically-addressable
            [(define (fields _)
               (list 'init.name 'member.external-name ...))
             (define (get-field x field-name)

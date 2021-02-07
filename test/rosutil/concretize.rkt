@@ -40,7 +40,7 @@
   (check-pred unsat? (concrete t2)))
 
 (struct foo (bar baz) #:transparent
-  #:methods gen:yosys-module
+  #:methods gen:dynamically-addressable
   [(define (fields _) '(bar baz))
    (define (get-field x s)
      (case s
