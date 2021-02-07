@@ -332,14 +332,14 @@
     (syntax-parse stx
       [(_ form ...)
        (define module-name (syntax-e (second (syntax->list (first (filter-tagged #'yosys-smt2-module #f stx))))))
-       (define input-stxs (filter-tagged #'yosys-smt2-input #'define-fun stx))
-       (define output-stxs (filter-tagged #'yosys-smt2-output #'define-fun stx))
-       (define register-stxs (filter-tagged #'yosys-smt2-register #'define-fun stx))
-       (define memory-stxs (filter-tagged #'yosys-smt2-memory #'define-fun stx))
        (define (get-name decl-stx) (syntax-e (second (syntax->list decl-stx))))
        (define clock-names (list->set (map get-name (filter-tagged #'yosys-smt2-clock #f stx))))
        (define (filter-clocks stxs)
          (filter (lambda (decl-stx) (not (set-member? clock-names (get-name (first decl-stx))))) stxs))
+       (define input-stxs (filter-clocks (filter-tagged #'yosys-smt2-input #'define-fun stx)))
+       (define output-stxs (filter-clocks (filter-tagged #'yosys-smt2-output #'define-fun stx)))
+       (define register-stxs (filter-tagged #'yosys-smt2-register #'define-fun stx))
+       (define memory-stxs (filter-tagged #'yosys-smt2-memory #'define-fun stx))
        #`(form
           ...
           (begin
@@ -351,6 +351,8 @@
             #,(gen-struct stx "input" (map first (filter-clocks input-stxs)))
             #,(gen-struct stx "output" (map first (filter-clocks output-stxs)))
             #,(gen-input-setter stx module-name (map first (filter-clocks input-stxs)))
+            (define (get-input state)
+              (apply #,(format-id stx "input") (map (lambda (o) ((cdr o) state)) inputs)))
             (define (get-output state)
               (apply #,(format-id stx "output") (map (lambda (o) ((cdr o) state)) outputs)))
             (provide get-output)
@@ -363,5 +365,6 @@
                               #,(format-id stx "with-input")
                               #,(format-id stx "output")
                               #,(format-id stx "output-getters")
+                              get-input
                               get-output))
             (provide metadata)))])))

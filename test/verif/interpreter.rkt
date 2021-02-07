@@ -115,3 +115,10 @@
        (out (input #t #t))
        (loop-until-wraparound 0)))
   (check-equal? (run (make-interpreter prog globals (new-zeroed-counter_s) metadata)) 255))
+
+(test-case "out without args"
+  (define prog
+    '(begin
+       (out (input #t #f))
+       (equal? (out) (input #t #f))))
+  (check-equal? (run (initialize0 prog)) #t))

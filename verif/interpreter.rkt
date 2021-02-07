@@ -401,8 +401,14 @@
         (let ([inp ((meta-get-output meta) circuit)])
           (cont inp globals))]
        [(out)
-        (let ([circuit* ((meta-with-input meta) circuit (first args))])
-          (cont (void) (update-circuit globals circuit*)))]
+        ;; if args is empty, assume we are _getting_ the circuit's input
+        (cond
+          [(empty? args)
+           (let ([out ((meta-get-input meta) circuit)])
+             (cont out globals))]
+          [else
+           (let ([circuit* ((meta-with-input meta) circuit (first args))])
+             (cont (void) (update-circuit globals circuit*)))])]
        [(input)
         (cont (apply (meta-input meta) args) globals)]
        [(output)
