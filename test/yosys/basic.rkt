@@ -34,7 +34,7 @@
    (bv #b11111111 8)))
 
 (test-case "inputs/outputs/registers"
-  (check-equal? (length inputs) 3)
+  (check-equal? (length inputs) 2)
   (check-equal? (length outputs) 1)
   (check-equal? (first outputs) (cons 'count |counter_n count|))
   (check-equal? (length registers) 1)

@@ -248,10 +248,10 @@
     [(empty? (cdr lst)) (!error 'make-assoc "odd number of elements")]
     [else (cons (cons (car lst) (cadr lst)) (make-assoc (cddr lst)))]))
 
-(define (assoc! v lst)
+(define (assoc-default v lst default)
   (define r (assoc v lst))
   (if (not r)
-      (!error 'assoc! "does not contain ~a" v)
+      default
       (cdr r)))
 
 (begin-for-syntax
@@ -300,7 +300,10 @@
         ;; constructor with named fields
         (define (#,name* . args)
           (define args* (make-assoc args))
-          (#,struct-name #,@(for/list ([f fields]) #`(assoc! '#,(second f) args*))))
+          (#,struct-name #,@(for/list ([f fields]) #`(assoc-default '#,(second f) args* #,(let ([w (syntax-e (third f))])
+                                                                                            (if (equal? w 1)
+                                                                                                #'#f
+                                                                                                #`(bv 0 #,w)))))))
         (define #,getters-name
           (list
            #,@(for/list ([f fields])

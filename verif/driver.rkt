@@ -42,11 +42,16 @@
     [(_ global-bindings:id ((~literal $define) (value-name:id formals:id ...) body:expr ...+) form ...)
      #'(let* ([value-name (closure '(lambda (formals ...) body ...) (make-assoc))]
               [global-bindings (assoc-extend global-bindings 'value-name value-name)])
+         (process-defines global-bindings form ...))]
+    [(_ global-bindings:id ((~literal $define) (value-name:id . rest-arg:id) body:expr ...+) form ...)
+     #'(let* ([value-name (closure '(lambda rest-arg body ...) (make-assoc))]
+              [global-bindings (assoc-extend global-bindings 'value-name value-name)])
          (process-defines global-bindings form ...))]))
 
 (define-syntax ($#%module-begin stx)
   (syntax-parse stx
     [(_ form ...)
+     #:with global-bindings (format-id stx "global-bindings")
      #:with interpreter-factory (format-id stx "interpreter-factory")
      #'(#%module-begin
         (define global-bindings
@@ -54,4 +59,4 @@
             (process-defines global-bindings form ...)))
         (define ((interpreter-factory metadata) expr initial-circuit)
           (make-interpreter expr global-bindings initial-circuit metadata))
-        (provide interpreter-factory))]))
+        (provide global-bindings interpreter-factory))]))

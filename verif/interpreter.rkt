@@ -1,9 +1,12 @@
 #lang rosette/safe
 
-(require (only-in racket error [symbol? racket/symbol?])
-         rosette/lib/destruct
-         syntax/parse/define
-         yosys/meta)
+(require
+ (prefix-in lib: "lib.rkt")
+ (only-in racket error [symbol? racket/symbol?])
+ rosette/lib/destruct
+ syntax/parse/define
+ yosys/meta
+ yosys/generic)
 
 (provide
  basic-value?
@@ -96,10 +99,10 @@
 (define (app-args expr)
   (cdr expr))
 
-(define (value? expr)
-  (equal? (tag expr) 'value))
+(define (quote? expr)
+  (equal? (tag expr) 'quote))
 
-(define (value-get expr)
+(define (quote-get expr)
   (second expr))
 
 ;; Values
@@ -109,6 +112,7 @@
 ;; | boolean?
 ;; | integer?
 ;; | bv?
+;; | symbol?
 ;; | null?
 ;; | cons?
 ;; | closure?
@@ -125,6 +129,7 @@
       (boolean? v)
       (integer? v)
       (bv? v)
+      (symbol? v)
       (null? v)
       (and (cons? v) (basic-value? (car v)) (basic-value? (cdr v)))
       (closure? v)
@@ -205,7 +210,7 @@
    ;; equality
    equal?
    ;; list
-   cons car cdr null? list? list length reverse
+   cons car cdr caar cadr cdar cddr null? empty? first second third fourth list? list length reverse
    ;; boolean
    not
    ;; integer
@@ -221,7 +226,9 @@
    ;; conversion operators
    concat extract sign-extend zero-extend bitvector->integer bitvector->natural integer->bitvector
    ;; additional operators
-   bit lsb msb bvzero? bvadd1 bvsub1 bvsmin bvumin bvsmax bvumax bvrol bvror rotate-left rotate-right bitvector->bits bitvector->bool bool->bitvector))
+   bit lsb msb bvzero? bvadd1 bvsub1 bvsmin bvumin bvsmax bvumax bvrol bvror rotate-left rotate-right bitvector->bits bitvector->bool bool->bitvector
+   ;; yosys generic
+   get-field update-field))
 
 (define (builtin-apply values globals cont)
   (local-apply (car values) (cadr values) globals cont))
@@ -241,7 +248,8 @@
 (define initial-environment
   (append
    initial-values
-   (map (lambda (sv) (let ([name (car sv)]) (cons name (builtin name)))) builtins)))
+   (map (lambda (sv) (let ([name (car sv)]) (cons name (builtin name)))) builtins)
+   (map (lambda (se) (let ([name (car se)] [e (cdr se)]) (cons name (closure e (make-assoc))))) lib:global-exprs)))
 
 ;; State
 
@@ -411,6 +419,8 @@
              (cont (void) (update-circuit globals circuit*)))])]
        [(input)
         (cont (apply (meta-input meta) args) globals)]
+       [(input*)
+        (cont (apply (meta-input* meta) args) globals)]
        [(output)
         (cont (apply (meta-output meta) args) globals)]
        [else
@@ -443,12 +453,12 @@
     ;; value literal?
     [(literal? expr)
      (cont expr globals)]
-    ;; injected value?
-    [(value? expr)
-     (let ([val (value-get expr)])
+    ;; quote?
+    [(quote? expr)
+     (let ([val (quote-get expr)])
        (unless (basic-value? val)
          (error 'step "not a basic value: ~v" val))
-       (cont (value-get expr) globals))]
+       (cont val globals))]
     ;; lambda?
     [(lambda? expr)
      (cont (closure expr env) globals)]
@@ -498,8 +508,9 @@
 (define (run sv #:trace [trace #f])
   (if (state? sv)
       (begin
-        (when trace
-          (printf "~a~n" (show sv)))
+        (cond
+          [(equal? trace #t) (printf "~a~n" (show sv))]
+          [(procedure? trace) (trace sv)])
         (run (step sv) #:trace trace))
       sv))
 
@@ -517,6 +528,7 @@
     (cons 'out (circuit-op 'out))
     ;; input constructor
     (cons 'input (circuit-op 'input))
+    (cons 'input* (circuit-op 'input*))
     ;; output constructor
     (cons 'output (circuit-op 'output)))
    ;; input getters

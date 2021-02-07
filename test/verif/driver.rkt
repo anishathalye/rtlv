@@ -53,7 +53,7 @@
   (define inp (list 1 x 1))
   (define s0 ((interpreter-factory metadata)
               `(begin
-                 (inc-all (value ,inp))
+                 (inc-all (quote ,inp))
                  (get))
               c0))
   (define v (run s0))

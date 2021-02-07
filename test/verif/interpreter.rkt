@@ -122,3 +122,18 @@
        (out (input #t #f))
        (equal? (out) (input #t #f))))
   (check-equal? (run (initialize0 prog)) #t))
+
+(test-case "out*"
+  (define prog
+    '(begin
+       (out (input* 'en #t))
+       (out* 'en #f)
+       (and
+        (equal? (input-en (out)) #f)
+        (equal? (input-nrst (out)) #f))))
+  (check-equal? (run (initialize0 prog)) #t))
+
+(test-case "lib"
+  (define prog
+    '(map add1 '(1 2 3 4)))
+  (check-equal? (run (initialize0 prog)) '(2 3 4 5)))
