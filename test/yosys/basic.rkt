@@ -129,3 +129,15 @@ EOS
         [(bitvector? t) (bv 0 (bitvector-size t))])))
   (check-equal? zeroed (counter_s #f #f (bv 0 8) #f #f))
   (check-equal? (fields zeroed) '(counter_is clk count en nrst)))
+
+(test-case "input*"
+  (define i (input* 'nrst #t 'en #f))
+  (check-equal? (input-nrst i) #t)
+  (check-equal? (input-en i) #f))
+
+(test-case "input generic"
+  (define i (input* 'nrst #t 'en #f))
+  (check-equal? (get-field i 'nrst) #t)
+  (check-equal? (get-field i 'en) #f)
+  (define i* (update-field i 'nrst #f))
+  (check-equal? (input-nrst i*) #f))

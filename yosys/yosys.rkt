@@ -242,6 +242,18 @@
            (fprintf port " ")
            (print x port mode)))]))
 
+(define (make-assoc lst)
+  (cond
+    [(empty? lst) '()]
+    [(empty? (cdr lst)) (!error 'make-assoc "odd number of elements")]
+    [else (cons (cons (car lst) (cadr lst)) (make-assoc (cddr lst)))]))
+
+(define (assoc! v lst)
+  (define r (assoc v lst))
+  (if (not r)
+      (!error 'assoc! "does not contain ~a" v)
+      (cdr r)))
+
 (begin-for-syntax
   (define (take-upto p l)
     (let rec ([l l]
@@ -272,25 +284,35 @@
             [getter (second (syntax->list (last el)))])
         #`(cons '#,name #,getter))))
 
-  (define (gen-struct ctxt name fields)
+  (define (gen-struct ctxt name fields-stxs)
+    (define fields (map syntax->list fields-stxs))
     (define struct-name (format-id ctxt name))
     (define new-symbolic-name (format-id ctxt "new-symbolic-~a" name))
     (define getters-name (format-id ctxt "~a-getters" name))
+    (define name* (format-id ctxt "~a*" name))
     #`(begin
-        (struct #,struct-name #,(for/list ([f fields]) (second (syntax->list f)))
+        (dynamically-addressable-struct #,struct-name #,(for/list ([f fields])
+                                                          #`(#,(second f) #,(let ([w (syntax-e (third f))])
+                                                                              (if (equal? w 1)
+                                                                                  #''boolean
+                                                                                  #`'(bitvector #,w)))))
           #:transparent)
+        ;; constructor with named fields
+        (define (#,name* . args)
+          (define args* (make-assoc args))
+          (#,struct-name #,@(for/list ([f fields]) #`(assoc! '#,(second f) args*))))
         (define #,getters-name
           (list
            #,@(for/list ([f fields])
-                (let ([getter-name (format-id ctxt "~a-~a" struct-name (second (syntax->list f)))])
+                (let ([getter-name (format-id ctxt "~a-~a" struct-name (second f))])
                       #`(cons '#,getter-name #,getter-name)))))
         (define (#,new-symbolic-name)
           (#,struct-name #,@(for/list ([f fields])
-                              (let* ([name (syntax-e (second (syntax->list f)))]
-                                     [w (syntax-e (third (syntax->list f)))]
+                              (let* ([name (syntax-e (second f))]
+                                     [w (syntax-e (third f))]
                                      [type (if (equal? w 1) #'boolean? #`(bitvector #,w))])
                                 #`(fresh-symbolic '#,name #,type)))))
-        (provide (struct-out #,struct-name) #,getters-name #,new-symbolic-name)))
+        (provide (struct-out #,struct-name) #,name* #,getters-name #,new-symbolic-name)))
 
   (define (gen-input-setter ctxt module-name fields)
     (define struct-name (format-id ctxt "~a_s" module-name))
@@ -336,6 +358,7 @@
             (define metadata (meta
                               #,(format-id stx "step")
                               #,(format-id stx "input")
+                              #,(format-id stx "input*")
                               #,(format-id stx "input-getters")
                               #,(format-id stx "with-input")
                               #,(format-id stx "output")
