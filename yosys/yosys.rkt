@@ -266,30 +266,23 @@
                    (cons (if tag-end (take-upto (tag-match? tag-end) forms) (first forms)) acc)
                    acc)))))
 
-  (define (collect-getters tag stx)
-    (for/list ([el (filter-tagged tag #'define-fun stx)])
+  (define (build-getters stxs)
+    (for/list ([el stxs])
       (let ([name (second (syntax->list (first el)))]
             [getter (second (syntax->list (last el)))])
         #`(cons '#,name #,getter))))
 
-  (define (tagged-except-clocks tag stx)
-    (define (get-name decl-stx) (syntax-e (second (syntax->list decl-stx))))
-    (let ([clock-names (list->set (map get-name (filter-tagged #'yosys-smt2-clock #f stx)))])
-      (filter (lambda (decl-stx) (not (set-member? clock-names (get-name decl-stx))))
-              (filter-tagged tag #f stx))))
-
-  (define (gen-struct tag name stx)
-    (define fields (tagged-except-clocks tag stx))
-    (define struct-name (format-id stx name))
-    (define new-symbolic-name (format-id stx "new-symbolic-~a" name))
-    (define getters-name (format-id stx "~a-getters" name))
+  (define (gen-struct ctxt name fields)
+    (define struct-name (format-id ctxt name))
+    (define new-symbolic-name (format-id ctxt "new-symbolic-~a" name))
+    (define getters-name (format-id ctxt "~a-getters" name))
     #`(begin
         (struct #,struct-name #,(for/list ([f fields]) (second (syntax->list f)))
           #:transparent)
         (define #,getters-name
           (list
            #,@(for/list ([f fields])
-                (let ([getter-name (format-id stx "~a-~a" struct-name (syntax-e (second (syntax->list f))))])
+                (let ([getter-name (format-id ctxt "~a-~a" struct-name (second (syntax->list f)))])
                       #`(cons '#,getter-name #,getter-name)))))
         (define (#,new-symbolic-name)
           (#,struct-name #,@(for/list ([f fields])
@@ -299,17 +292,17 @@
                                 #`(fresh-symbolic '#,name #,type)))))
         (provide (struct-out #,struct-name) #,getters-name #,new-symbolic-name)))
 
-  (define (gen-input-setter module-name stx)
-    (define struct-name (format-id stx "~a_s" module-name))
-    (define with-input (format-id stx "with-input"))
+  (define (gen-input-setter ctxt module-name fields)
+    (define struct-name (format-id ctxt "~a_s" module-name))
+    (define with-input (format-id ctxt "with-input"))
     #`(begin
         (define (#,with-input state input)
           (!struct-copy
            #,struct-name
            state
-           #,@(for/list ([inp (tagged-except-clocks #'yosys-smt2-input stx)])
+           #,@(for/list ([inp fields])
                 (let* ([name (syntax-e (second (syntax->list inp)))]
-                       [getter (format-id stx "input-~a" name)])
+                       [getter (format-id ctxt "input-~a" name)])
                   #`(#,name (#,getter input))))))
         (provide #,with-input)))
 
@@ -317,17 +310,25 @@
     (syntax-parse stx
       [(_ form ...)
        (define module-name (syntax-e (second (syntax->list (first (filter-tagged #'yosys-smt2-module #f stx))))))
+       (define input-stxs (filter-tagged #'yosys-smt2-input #'define-fun stx))
+       (define output-stxs (filter-tagged #'yosys-smt2-output #'define-fun stx))
+       (define register-stxs (filter-tagged #'yosys-smt2-register #'define-fun stx))
+       (define memory-stxs (filter-tagged #'yosys-smt2-memory #'define-fun stx))
+       (define (get-name decl-stx) (syntax-e (second (syntax->list decl-stx))))
+       (define clock-names (list->set (map get-name (filter-tagged #'yosys-smt2-clock #f stx))))
+       (define (filter-clocks stxs)
+         (filter (lambda (decl-stx) (not (set-member? clock-names (get-name (first decl-stx))))) stxs))
        #`(form
           ...
           (begin
             (provide inputs outputs registers memories)
-            (define inputs (list #,@(collect-getters #'yosys-smt2-input stx)))
-            (define outputs (list #,@(collect-getters #'yosys-smt2-output stx)))
-            (define registers (list #,@(collect-getters #'yosys-smt2-register stx)))
-            (define memories (list #,@(collect-getters #'yosys-smt2-memory stx)))
-            #,(gen-struct #'yosys-smt2-input "input" stx)
-            #,(gen-struct #'yosys-smt2-output "output" stx)
-            #,(gen-input-setter module-name stx)
+            (define inputs (list #,@(build-getters input-stxs)))
+            (define outputs (list #,@(build-getters output-stxs)))
+            (define registers (list #,@(build-getters register-stxs)))
+            (define memories (list #,@(build-getters memory-stxs)))
+            #,(gen-struct stx "input" (map first (filter-clocks input-stxs)))
+            #,(gen-struct stx "output" (map first (filter-clocks output-stxs)))
+            #,(gen-input-setter stx module-name (map first (filter-clocks input-stxs)))
             (define (get-output state)
               (apply #,(format-id stx "output") (map (lambda (o) ((cdr o) state)) outputs)))
             (provide get-output)
