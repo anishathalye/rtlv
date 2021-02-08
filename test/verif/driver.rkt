@@ -3,7 +3,7 @@
 (require
  (except-in "../yosys/verilog/counter.rkt" step)
  "driver/counter.rkt"
- (only-in verif/interpreter step run)
+ (only-in verif/interpreter step run*)
  rackunit)
 
 (test-case "basic"
@@ -13,12 +13,12 @@
                  (inc 10)
                  (get))
               c0))
-  (check-equal? (run s0) 10))
+  (check-equal? (run* s0) 10))
 
 (test-case "constant defined in terms of another"
   (define c0 (new-zeroed-counter_s))
   (define s0 ((interpreter-factory metadata) 'CONST-5 c0))
-  (check-equal? (run s0) 5))
+  (check-equal? (run* s0) 5))
 
 (test-case "symbolic inputs and symbolic control flow"
   (define c0 (new-zeroed-counter_s))
@@ -33,7 +33,7 @@
                  (if (not ,b) (inc1) (void))
                  (get))
               c0))
-  (define v (run s0))
+  (define v (run* s0))
   (define p (equal? v (if b 2 1)))
   (check-pred unsat? (verify (assert p))))
 
@@ -44,7 +44,7 @@
                  (inc-all (list 1 2 3 4))
                  (get))
               c0))
-  (check-equal? (run s0) 10))
+  (check-equal? (run* s0) 10))
 
 (test-case "injected value, with a symbolic, causing symbolic control flow"
   (define c0 (new-zeroed-counter_s))
@@ -56,7 +56,7 @@
                  (inc-all (quote ,inp))
                  (get))
               c0))
-  (define v (run s0))
+  (define v (run* s0))
   (define p (equal? v (if b 3 4)))
   (check-pred unsat? (verify (assert p))))
 
@@ -68,7 +68,7 @@
                  (inc1)
                  (cons ((get) . < . initial) initial))
               c0))
-  (define v (run s0))
+  (define v (run* s0))
   (define m (solve (assert (car v))))
   (check-pred sat? m)
   (check-equal? (evaluate (cdr v) m) 255))

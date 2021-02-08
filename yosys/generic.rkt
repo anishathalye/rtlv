@@ -40,8 +40,7 @@
     [(_ [v:id s] body ...)
      #'(for/struct [(_ v) s] body ...)]
     [(_ [(k:id v:id) s] body ...)
-     #:declare s (expr/c #'dynamically-addressable?)
-     #'(map-fields s.c (lambda (k v) body ...))]))
+     #'(map-fields s (lambda (k v) body ...))]))
 
 (define (update-field struct-value field-name new-value)
   (update-fields struct-value (list (cons field-name new-value))))

@@ -6,6 +6,7 @@
          overapproximate-symbolic-store-threshold
          overapproximate-symbolic-load-threshold
          field-filter
+         to-field-filter
          (contract-out
           [filter/not
            (-> filter/c
@@ -61,7 +62,7 @@
 
 (define (to-field-filter v)
   (cond
-    [(not v) (lambda (s) #t)]
+    [(boolean? v) (lambda (s) v)]
     [(string? v) (lambda (s) (string-contains? (symbol->string s) v))]
     [(regexp? v) (lambda (s) (regexp-match v (symbol->string s)))]
     [else v]))
@@ -82,7 +83,7 @@
 ; regexp?: to match the string representation of the symbol
 ; symbol? -> any: filter function
 (define field-filter
-  (make-parameter (lambda (s) #t)
+  (make-parameter (to-field-filter #t)
                   (lambda (v)
                     (unless (or (not v)
                                 (string? v)

@@ -9,9 +9,10 @@
  yosys/generic)
 
 (provide
- basic-value?
- make-interpreter step run show closure
+ basic-value? uninterpreted?
+ make-interpreter step run run* show closure update-circuit
  make-assoc assoc-contains assoc-lookup assoc-remove assoc-extend assoc-extend*
+ (struct-out finished)
  (struct-out state)
  (struct-out globals))
 
@@ -264,6 +265,9 @@
   (control environment globals continuation)
   #:transparent)
 
+(struct finished (value circuit)
+  #:transparent)
+
 ;; Continuation
 
 (struct continuation
@@ -275,7 +279,7 @@
   #:transparent
   #:property prop:procedure
   (lambda (this val globals)
-    val))
+    (finished val (globals-circuit globals))))
 
 (struct eval-app continuation
   (environment function-value argument-values argument-exprs continuation)
@@ -513,6 +517,9 @@
           [(procedure? trace) (trace sv)])
         (run (step sv) #:trace trace))
       sv))
+
+(define (run* sv #:trace [trace #f])
+  (finished-value (run sv #:trace trace)))
 
 (define (meta->environment metadata)
   (define (make-op name-f)
