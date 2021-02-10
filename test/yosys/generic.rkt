@@ -34,7 +34,7 @@
 (test-case "show-diff"
   (define s0 (new-zeroed-counter_s))
   (define s1 (update-field s0 'count (@bv 3 8)))
-  (define res (with-output-to-string (thunk (show-diff s0 s1))))
+  (define res (show-diff s0 s1))
   (define expected
     #<<EOS
 {

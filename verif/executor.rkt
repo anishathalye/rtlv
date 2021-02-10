@@ -16,6 +16,13 @@
     (define finished '())
     (define working (list initial-state))
     (define waiting-to-merge '())
+    (define debug #f)
+
+    (define/public (debug!)
+      (set! debug #t))
+
+    (define (dprintf . args)
+      (when debug (apply printf args)))
 
     (define (run-single st)
       (define st* (run-to-next-hypercall st))
@@ -47,12 +54,12 @@
                      ckt
                      setup
                      (make-field-abstractor (yosys:to-field-filter abstr))
-                     len
-                     free-variables))
+                     len))
          ;; step (interpreter) once more to advance past the call
          (define st1 (step st))
          ;; make one state for every point in fp, put back on working list
-         (set! working (append (for/list ([ckt fp]) (update-state-circuit st1 ckt)) working))]
+         (set! working (append (for/list ([ckt fp]) (update-state-circuit st1 ckt)) working))
+         (dprintf "info: yielded, now have ~v threads~n" (length working))]
         [(hint)
          (cond
            [(concretize? hint)
@@ -95,14 +102,65 @@
           (error 'merge-states "states differ in aspects other than circuit")))
       (define ckts
         (shrink-set
-         free-variables
          (map
           (lambda (s) (if (finished? s) (finished-circuit s) (globals-circuit (state-globals s))))
           waiting-to-merge)))
       ;; next working set
-      (set! waiting-to-merge '())
       (set! working (for/list ([ckt ckts])
-                      (update-state-circuit template-state ckt))))
+                      (update-state-circuit template-state ckt)))
+      (dprintf "info: merged, reduced from ~v states to ~v states~n" (length waiting-to-merge) (length working))
+      (set! waiting-to-merge '()))
+
+      (define (compute-fixpoint step s0 setup-cycles abstract-fn cycle-length)
+        (define rev-prefix (rev-step-n step s0 setup-cycles))
+        (define sn (first rev-prefix))
+        (define sn-abs (abstract-fn sn))
+        (define rev-abs-stepped (rev-step-n step sn-abs cycle-length))
+        ;; make sure it is indeed a fixpoint, only need to check this last bit since others were computed by step
+        (define next-step (step (first rev-abs-stepped)))
+        (unless (field-subset? free-variables next-step sn-abs)
+          (dprintf "next step: ~v~n does not loop back to~nabstracted: ~v~ndiff: ~a~n" next-step sn-abs (yosys:show-diff next-step sn-abs))
+          (error 'compute-fixpoint "Did not find a fixpoint"))
+        (reverse (append rev-abs-stepped (rest rev-prefix))))
+
+      ;; aims to be sound, can't be "complete" (what is complete?)
+      (define (shrink-set s)
+        (let loop ([pending (reverse s)]
+                   [keep '()])
+          (if (empty? pending)
+              keep
+              (let ()
+                (define p (first pending))
+                (define pp (rest pending))
+                (define represented
+                  (for/or ([k keep])
+                    (field-subset? free-variables p k)))
+                (if represented
+                    (loop pp keep)
+                    ;; need to add
+                    (loop pp (cons p keep)))))))
+
+      (define (update-state-circuit st ckt)
+        (if (state? st)
+            (state
+             (state-control st)
+             (state-environment st)
+             (update-circuit (state-globals st) ckt)
+             (state-continuation st))
+            (finished (finished-value st) ckt)))
+
+      (define (run-to-next-hypercall stv)
+        (if (state? stv)
+            ;; state
+            (begin
+              (if (in-hypercall? stv)
+                  stv ; return as-is
+                  (run-to-next-hypercall (step stv))))
+            ;; value
+            stv))
+
+      (define (in-hypercall? st)
+        (uninterpreted? (state-control st)))
 
     (define/public (run)
       (cond
@@ -122,27 +180,6 @@
 
 (define (@=? a b)
   (equal? (@equal? a b) #t))
-
-(define (update-state-circuit st ckt)
-  (if (state? st)
-      (state
-       (state-control st)
-       (state-environment st)
-       (update-circuit (state-globals st) ckt)
-       (state-continuation st))
-      (finished (finished-value st) ckt)))
-
-(define (run-to-next-hypercall stv)
-  (if (state? stv)
-      ;; state
-      (if (in-hypercall? stv)
-          stv ; return as-is
-          (run-to-next-hypercall (step stv)))
-      ;; value
-      stv))
-
-(define (in-hypercall? st)
-  (uninterpreted? (state-control st)))
 
 ;; this stuff is only safe to use on Yosys modules (so field types are
 ;; bitvector, bool, and vector of bitvector)
@@ -267,32 +304,3 @@
         (let* ([ss (loop s (sub1 n))]
                [sn-1 (first ss)])
           (cons (step sn-1) ss)))))
-
-(define (compute-fixpoint step s0 setup-cycles abstract-fn cycle-length free-variables)
-  (define rev-prefix (rev-step-n step s0 setup-cycles))
-  (define sn (first rev-prefix))
-  (define sn-abs (abstract-fn sn))
-  (define rev-abs-stepped (rev-step-n step sn-abs cycle-length))
-  ;; make sure it is indeed a fixpoint, only need to check this last bit since others were computed by step
-  (define next-step (step (first rev-abs-stepped)))
-  (unless (field-subset? free-variables next-step sn-abs)
-    (printf "~v ~v~n" next-step sn-abs)
-    (error 'compute-fixpoint "Did not find a fixpoint"))
-  (reverse (append rev-abs-stepped (rest rev-prefix))))
-
-;; aims to be sound, can't be "complete" (what is complete?)
-(define (shrink-set free-symbolics s)
-  (let loop ([pending (reverse s)]
-             [keep '()])
-    (if (empty? pending)
-        keep
-        (let ()
-          (define p (first pending))
-          (define pp (rest pending))
-          (define represented
-            (for/or ([k keep])
-              (field-subset? free-symbolics p k)))
-          (if represented
-              (loop pp keep)
-              ;; need to add
-              (loop pp (cons p keep)))))))

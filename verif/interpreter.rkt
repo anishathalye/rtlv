@@ -2,7 +2,7 @@
 
 (require
  (prefix-in lib: "lib.rkt")
- (only-in racket error [symbol? racket/symbol?])
+ (only-in racket error string? [symbol? racket/symbol?])
  rosette/lib/destruct
  syntax/parse/define
  yosys/meta
@@ -31,7 +31,7 @@
   (symbol? expr))
 
 (define (literal? expr)
-  (or (boolean? expr) (integer? expr)))
+  (or (boolean? expr) (integer? expr) (string? expr)))
 
 (define (lambda? expr)
   (equal? (tag expr) 'lambda))
@@ -112,6 +112,7 @@
 ;; | void?
 ;; | boolean?
 ;; | integer?
+;; | string?
 ;; | bv?
 ;; | symbol?
 ;; | null?
@@ -129,6 +130,7 @@
   (or (void? v)
       (boolean? v)
       (integer? v)
+      (string? v)
       (bv? v)
       (symbol? v)
       (null? v)
