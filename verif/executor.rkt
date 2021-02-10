@@ -13,7 +13,7 @@
     (init initial-state)
     (init-field hint-db)
     (define free-variables (weak-seteq))
-    (define finished '())
+    (define completed '())
     (define working (list initial-state))
     (define waiting-to-merge '())
     (define debug #f)
@@ -38,7 +38,7 @@
       (cond
         [(not (state? st*))
          ;; value
-         (set! finished (cons st* finished))]
+         (set! completed (cons st* completed))]
         [else
          ;; hypercall
          (handle-hypercall st*)]))
@@ -177,8 +177,8 @@
     (define/public (run!)
       (cond
         [(and (empty? working) (empty? waiting-to-merge))
-         ;; we are done, return values
-         finished]
+         ;; we are completed, return values
+         completed]
         [(not (empty? working))
          ;; more "single threads" to execute
          (match-define (cons h t) working)
