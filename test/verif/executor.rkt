@@ -43,7 +43,7 @@
 (define (run prog c0)
   (define state ((interpreter-factory metadata) prog c0))
   (define exc (new executor% [initial-state state] [hint-db hint-db]))
-  (send exc run))
+  (send exc run!))
 
 (test-case "merging"
   (define c0 (with-invariants (new-symbolic-lockbox_s) lockbox_i))

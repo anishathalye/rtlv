@@ -21,6 +21,15 @@
     (define/public (debug!)
       (set! debug #t))
 
+    (define solver (lambda (hint) (@current-solver)))
+    (define/public (set-solver! hint-q s)
+      (set! solver
+            (let ([old-solver solver])
+              (lambda (hint)
+                (if (hint-q hint)
+                    s
+                    (old-solver hint))))))
+
     (define (dprintf . args)
       (when debug (apply printf args)))
 
@@ -49,30 +58,33 @@
          (define metadata (globals-meta g))
          (define ckt-step (yosys:meta-step metadata))
          (match-define (fixpoint setup abstr len) hint)
-         (define fp (compute-fixpoint
-                     ckt-step
-                     ckt
-                     setup
-                     (make-field-abstractor (yosys:to-field-filter abstr))
-                     len))
+         (define fp
+           (parameterize ([@current-solver (solver hint)])
+             (compute-fixpoint
+              ckt-step
+              ckt
+              setup
+              (make-field-abstractor (yosys:to-field-filter abstr))
+              len)))
          ;; step (interpreter) once more to advance past the call
          (define st1 (step st))
          ;; make one state for every point in fp, put back on working list
          (set! working (append (for/list ([ckt fp]) (update-state-circuit st1 ckt)) working))
          (dprintf "info: yielded, now have ~v threads~n" (length working))]
         [(hint)
-         (cond
-           [(concretize? hint)
-            (let* ([ckt (globals-circuit (state-globals st))]
-                   [ckt-c (parameterize ([yosys:field-filter (concretize-field-filter hint)])
-                            (@concretize-fields ckt))]
-                   [st-c (update-state-circuit st ckt-c)])
-              ;; step once more to advance past the call, put back on working list
-              (set! working (cons (step st-c) working)))]
-           [(merge? hint)
-            ;; step once more to advance past the call, put on merge list
-            (set! waiting-to-merge (cons (step st) waiting-to-merge))]
-           [else (error 'handle-hypercall "unimplemented hint: ~a" hint)])]))
+         (parameterize ([@current-solver (solver hint)])
+           (cond
+             [(concretize? hint)
+              (let* ([ckt (globals-circuit (state-globals st))]
+                     [ckt-c (parameterize ([yosys:field-filter (concretize-field-filter hint)])
+                              (@concretize-fields ckt))]
+                     [st-c (update-state-circuit st ckt-c)])
+                ;; step once more to advance past the call, put back on working list
+                (set! working (cons (step st-c) working)))]
+             [(merge? hint)
+              ;; step once more to advance past the call, put on merge list
+              (set! waiting-to-merge (cons (step st) waiting-to-merge))]
+             [else (error 'handle-hypercall "unimplemented hint: ~a" hint)]))]))
 
     (define ((make-field-abstractor field-filter) st)
       (yosys:for/struct
@@ -162,7 +174,7 @@
       (define (in-hypercall? st)
         (uninterpreted? (state-control st)))
 
-    (define/public (run)
+    (define/public (run!)
       (cond
         [(and (empty? working) (empty? waiting-to-merge))
          ;; we are done, return values
@@ -172,11 +184,11 @@
          (match-define (cons h t) working)
          (set! working t)
          (run-single h)
-         (run)]
+         (run!)]
         [else
          ;; merge
          (merge-states)
-         (run)]))))
+         (run!)]))))
 
 (define (@=? a b)
   (equal? (@equal? a b) #t))
