@@ -58,7 +58,7 @@
                     v)))
 
 (define filter/c
-  (or/c #f string? regexp? (-> symbol? any)))
+  (or/c boolean? string? regexp? (-> symbol? any)))
 
 (define (to-field-filter v)
   (cond

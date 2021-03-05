@@ -10,7 +10,7 @@
   (define-symbolic* x (bitvector 8))
   (define term
     (bveq (bv -1 32) (concat (bv 0 24) x)))
-  (check-false (empty? (symbolics term)))
+  (check-false (concrete? term))
   (check-not-eq? term #f)
   (check-eq? (concretize term) #f))
 
@@ -28,7 +28,7 @@
   (define-symbolic* x (bitvector 8))
   (define term
     (concat (bv 0 6) (extract 1 0 x)))
-  (check-false (empty? (symbolics term)))
+  (check-false (concrete? term))
   (check-equal? term (concretize term))
   (check-exn !exn:fail? (thunk (concretize term #t))))
 

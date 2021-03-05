@@ -60,7 +60,7 @@
     ; this is an optimization: if a field is not concrete, we can skip it
     ; without an expensive call to the solver
     (define must-be-same
-      (and (empty? (@symbolics v-example))
+      (and (@concrete? v-example)
            (@unsat?
             (@solve
              (@assert

@@ -16,7 +16,7 @@
   [map-fields (-> dynamically-addressable? (-> symbol? any/c any) dynamically-addressable?)]
   [update-fields (-> dynamically-addressable? (listof (cons/c symbol? any/c)) dynamically-addressable?)]
   [update-field (-> dynamically-addressable? symbol? any/c dynamically-addressable?)]
-  [show-diff (-> dynamically-addressable? dynamically-addressable? any)])
+  [show-diff (-> dynamically-addressable? dynamically-addressable? string?)])
  for/struct
  dynamically-addressable-struct)
 

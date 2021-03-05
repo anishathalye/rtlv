@@ -37,8 +37,8 @@
 
 (define hint-db
   (make-hintdb
-   [get-fp (fixpoint 0 (filter/or "count_cycle") 3)]
-   [merge (merge)]))
+   [get-fp (fixpoint 0 (filter/or "count_cycle") 3 '())]
+   [merge (merge (lambda (_) #f))]))
 
 (define (run prog c0)
   (define state ((interpreter-factory metadata) prog c0))

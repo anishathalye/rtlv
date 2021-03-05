@@ -217,7 +217,7 @@
    ;; boolean
    not
    ;; integer
-   + - * quotient modulo zero? add1 sub1 abs max min < <= > >= expt integer?
+   + - * quotient modulo zero? add1 sub1 abs max min = < <= > >= expt integer?
    ;; bv
    bv bv?
    ;; comparison operators

@@ -15,7 +15,9 @@
     (define free-variables (weak-seteq))
     (define completed '())
     (define working (list initial-state))
-    (define waiting-to-merge '())
+    (define waiting '())
+    (define waiting-for-debug* #f)
+    (define merge-hint #f)
     (define debug #f)
 
     (define/public (debug!)
@@ -57,53 +59,86 @@
          (define ckt (globals-circuit g))
          (define metadata (globals-meta g))
          (define ckt-step (yosys:meta-step metadata))
-         (match-define (fixpoint setup abstr len) hint)
+         (match-define (fixpoint setup abstr len step-hints) hint)
          (define fp
            (parameterize ([@current-solver (solver hint)])
              (compute-fixpoint
               ckt-step
               ckt
               setup
-              (make-field-abstractor (yosys:to-field-filter abstr))
-              len)))
+              (make-field-abstractor abstr)
+              len
+              step-hints)))
          ;; step (interpreter) once more to advance past the call
          (define st1 (step st))
          ;; make one state for every point in fp, put back on working list
          (set! working (append (for/list ([ckt fp]) (update-state-circuit st1 ckt)) working))
-         (dprintf "info: yielded, now have ~v threads~n" (length working))]
+         (dprintf "info: yielded, now have ~a threads, ~a waiting~n" (length working) (length waiting))]
         [(hint)
          (parameterize ([@current-solver (solver hint)])
            (cond
-             [(concretize? hint)
+             [(circuit-hint? hint)
               (let* ([ckt (globals-circuit (state-globals st))]
-                     [ckt-c (parameterize ([yosys:field-filter (concretize-field-filter hint)])
-                              (@concretize-fields ckt))]
-                     [st-c (update-state-circuit st ckt-c)])
+                     [ckt* (apply-circuit-hint hint ckt)]
+                     [st* (update-state-circuit st ckt*)])
                 ;; step once more to advance past the call, put back on working list
-                (set! working (cons (step st-c) working)))]
+                (set! working (cons (step st*) working)))]
              [(merge? hint)
               ;; step once more to advance past the call, put on merge list
-              (set! waiting-to-merge (cons (step st) waiting-to-merge))]
+              (set! waiting (cons (step st) waiting))
+              (set! waiting-for-debug* #f)
+              (unless merge-hint
+                (set! merge-hint hint))]
+             [(debug*? hint)
+              ;; step once more to advance past the call, put on waiting list
+              (set! waiting (cons (step st) waiting))
+              (unless waiting-for-debug*
+                (set! waiting-for-debug* (debug*-fn hint)))]
+             [(debug? hint)
+              ;; pass interpreter state to debug function
+              ((debug-fn hint) st)
+              ;; step once more to advance past the call, put back on working list
+              (set! working (cons (step st) working))]
              [else (error 'handle-hypercall "unimplemented hint: ~a" hint)]))]))
 
+    (define (apply-circuit-hint hint ckt)
+      (match hint
+        [(concretize field-filter)
+         (parameterize ([yosys:field-filter field-filter])
+           (@concretize-fields ckt))]
+        [(overapproximate field-filter)
+         ((make-field-abstractor (overapproximate-field-filter hint)) ckt)]))
+
     (define ((make-field-abstractor field-filter) st)
+      (define ff (yosys:to-field-filter field-filter))
       (yosys:for/struct
        [(name value) st]
-       (if (field-filter name)
+       (if (ff name)
            ;; replace it
-           (let ([v (@fresh-symbolic name (@type-of value))])
-             (set-add! free-variables v)
-             v)
+           (if (vector? value)
+               (let ([v (@fresh-memory-like/unchecked name value)])
+                 (for ([el (in-vector v)])
+                   (set-add! free-variables el))
+                 v)
+               (let ([v (@fresh-symbolic name (@type-of value))])
+                 (set-add! free-variables v)
+                 v))
            ;; keep it as-is
            value)))
+
+    (define (do-debug*)
+      (waiting-for-debug* waiting)
+      (set! working waiting)
+      (set! waiting '())
+      (set! waiting-for-debug* #f))
 
     (define (merge-states)
       ;; right now, we only handle the case where the rest of the
       ;; interpreter state is identical between all forks; in the future, we
       ;; could partition by interpreter state and support multiple, but I don't
       ;; think this is necessary right now
-      (define template-state (first waiting-to-merge))
-      (for ([st (rest waiting-to-merge)])
+      (define template-state (first waiting))
+      (for ([st (rest waiting)])
         ;; note: we don't check globals, because we're expecting the
         ;; circuit to differ, and we're not expecting the environment or meta
         ;; to differ (it never changes)
@@ -113,70 +148,85 @@
                          (@=? (state-continuation st) (state-continuation template-state))))
           (error 'merge-states "states differ in aspects other than circuit")))
       (define ckts
-        (shrink-set
+        (shrink-by-key
          (map
           (lambda (s) (if (finished? s) (finished-circuit s) (globals-circuit (state-globals s))))
-          waiting-to-merge)))
+          waiting)
+         (merge-key merge-hint)))
       ;; next working set
       (set! working (for/list ([ckt ckts])
                       (update-state-circuit template-state ckt)))
-      (dprintf "info: merged, reduced from ~v states to ~v states~n" (length waiting-to-merge) (length working))
-      (set! waiting-to-merge '()))
+      (dprintf "info: merged, reduced from ~v states to ~v states~n" (length waiting) (length working))
+      (set! waiting '())
+      (set! merge-hint #f))
 
-      (define (compute-fixpoint step s0 setup-cycles abstract-fn cycle-length)
-        (define rev-prefix (rev-step-n step s0 setup-cycles))
-        (define sn (first rev-prefix))
-        (define sn-abs (abstract-fn sn))
-        (define rev-abs-stepped (rev-step-n step sn-abs cycle-length))
-        ;; make sure it is indeed a fixpoint, only need to check this last bit since others were computed by step
-        (define next-step (step (first rev-abs-stepped)))
-        (unless (field-subset? free-variables next-step sn-abs)
-          (dprintf "next step: ~v~n does not loop back to~nabstracted: ~v~ndiff: ~a~n" next-step sn-abs (yosys:show-diff next-step sn-abs))
-          (error 'compute-fixpoint "Did not find a fixpoint"))
-        (reverse (append rev-abs-stepped (rest rev-prefix))))
+    (define (compute-fixpoint step s0 setup-cycles abstract-fn cycle-length step-hints)
+      (define (step* ckt)
+        ;; step, but applying step-hints after every step
+        (for/fold ([ckt (step ckt)])
+                  ([hint (if (list? step-hints) step-hints (list step-hints))])
+          (apply-circuit-hint hint ckt)))
+      (define rev-prefix (rev-step-n step* s0 setup-cycles))
+      (define sn (first rev-prefix))
+      (define sn-abs (abstract-fn sn))
+      (define rev-abs-stepped (rev-step-n step* sn-abs cycle-length))
+      ;; make sure it is indeed a fixpoint, only need to check this last bit since others were computed by step
+      (define next-step (step* (first rev-abs-stepped)))
+      (unless (field-subset? free-variables next-step sn-abs)
+        (dprintf "next step: ~v~n does not loop back to~nabstracted: ~v~ndiff: ~a~n" next-step sn-abs (yosys:show-diff next-step sn-abs))
+        (error 'compute-fixpoint "Did not find a fixpoint"))
+      (reverse (append rev-abs-stepped (rest rev-prefix))))
 
-      ;; aims to be sound, can't be "complete" (what is complete?)
-      (define (shrink-set s)
-        (let loop ([pending (reverse s)]
-                   [keep '()])
-          (if (empty? pending)
-              keep
-              (let ()
-                (define p (first pending))
-                (define pp (rest pending))
-                (define represented
-                  (for/or ([k keep])
-                    (field-subset? free-variables p k)))
-                (if represented
-                    (loop pp keep)
-                    ;; need to add
-                    (loop pp (cons p keep)))))))
+    (define (shrink-by-key s key)
+      (define groups (group-by key s))
+      (dprintf "info: merging, have ~a states grouped into ~a partitions~n" (length s) (length groups))
+      (apply append (map shrink-set groups)))
 
-      (define (update-state-circuit st ckt)
-        (if (state? st)
-            (state
-             (state-control st)
-             (state-environment st)
-             (update-circuit (state-globals st) ckt)
-             (state-continuation st))
-            (finished (finished-value st) ckt)))
-
-      (define (run-to-next-hypercall stv)
-        (if (state? stv)
-            ;; state
+    ;; aims to be sound, can't be "complete" (what is complete?)
+    (define (shrink-set s)
+      (dprintf "info: merging ~a states~n" (length s))
+      (let loop ([pending (reverse s)]
+                 [keep '()])
+        (if (empty? pending)
             (begin
-              (if (in-hypercall? stv)
-                  stv ; return as-is
-                  (run-to-next-hypercall (step stv))))
-            ;; value
-            stv))
+              (dprintf "info: merged into ~a states~n" (length keep))
+              keep)
+            (let ()
+              (define p (first pending))
+              (define pp (rest pending))
+              (define represented
+                (for/or ([k keep])
+                  (field-subset? free-variables p k)))
+              (if represented
+                  (loop pp keep)
+                  ;; need to add
+                  (loop pp (cons p keep)))))))
 
-      (define (in-hypercall? st)
-        (uninterpreted? (state-control st)))
+    (define (update-state-circuit st ckt)
+      (if (state? st)
+          (state
+           (state-control st)
+           (state-environment st)
+           (update-circuit (state-globals st) ckt)
+           (state-continuation st))
+          (finished (finished-value st) ckt)))
+
+    (define (run-to-next-hypercall stv)
+      (if (state? stv)
+          ;; state
+          (begin
+            (if (in-hypercall? stv)
+                stv ; return as-is
+                (run-to-next-hypercall (step stv))))
+          ;; value
+          stv))
+
+    (define (in-hypercall? st)
+      (uninterpreted? (state-control st)))
 
     (define/public (run!)
       (cond
-        [(and (empty? working) (empty? waiting-to-merge))
+        [(and (empty? working) (empty? waiting))
          ;; we are completed, return values
          completed]
         [(not (empty? working))
@@ -187,7 +237,9 @@
          (run!)]
         [else
          ;; merge
-         (merge-states)
+         (if waiting-for-debug*
+             (do-debug*)
+             (merge-states))
          (run!)]))))
 
 (define (@=? a b)
@@ -214,51 +266,44 @@
     [(@unsat? res) #t]
     [else #f]))
 
-(define (definitely-not-equal? small big)
-  (for/or ([fn (yosys:fields small)])
-    (define s (yosys:get-field small fn))
-    (define b (yosys:get-field big fn))
-    (and (empty? (@symbolics s))
-         (empty? (@symbolics b))
-         (equal? (@equal? s b) #f))))
-
 (define (field-subset? free-symbolics small big)
-  (cond
-    ;; fast path: neither field depends on the inputs
-    [(eq? small big) #t]
-    [(equal? small big) #t]
-    [(definitely-not-equal? small big) #f]
-    [else
-     ;; get all the fields
-     (define all-fields (yosys:fields small))
-     ;; filter out the ones that are equal? to each other
-     (define-values (small-fields-filtered big-fields-filtered skipped-fields)
-       (for/fold ([s '()]
-                  [b '()]
-                  [skipped-fields '()])
-                 ([field-name all-fields])
-         (define field-s (yosys:get-field small field-name))
-         (define field-b (yosys:get-field big field-name))
-         (if (equal? field-s field-b)
-             (values s b (cons field-name skipped-fields))
-             (values (cons field-s s) (cons field-b b) skipped-fields))))
-     ;; bail out if any captured fields share symbolics that are not
-     ;; fixed with any non-captured fields: this case is quite complicated
-     ;; to handle, and I don't know if we need to figure out how to handle it,
-     ;; it may just not come up
-     (cond
-       ;; check free symbolics
-       [(for/or ([obj (list small big)])
-          (for/or ([field-name skipped-fields])
-            (not (set-empty? (set-intersect (list->seteq (@symbolics (yosys:get-field obj field-name))) free-symbolics)))))
-        #f]
-       ;; check if any fields left are a vector?, fail if so
-       [(for/or ([s small-fields-filtered]
-                 [b big-fields-filtered])
-          (or (@vector? s) (@vector? b)))
-        #f]
-       [else
-        (term-subset? free-symbolics small-fields-filtered big-fields-filtered)])]))
+  (let/cc return
+    (when (eq? small big)
+      (return #t))
+    ;; get all the fields
+    (define all-fields (yosys:fields small))
+    ;; filter out the ones that are equal? to each other
+    (define-values (small-fields-filtered big-fields-filtered skipped-fields)
+      (for/fold ([s '()]
+                 [b '()]
+                 [skipped-fields '()])
+                ([field-name all-fields])
+        (define field-s (yosys:get-field small field-name))
+        (define field-b (yosys:get-field big field-name))
+        (cond
+          [(equal? field-s field-b) (values s b (cons field-name skipped-fields))]
+          [(and (@concrete? field-s) (@concrete? field-b) (not (equal? s b))) (return #f)]
+          [else (values (cons field-s s) (cons field-b b) skipped-fields)])))
+    ;; bail out if any captured fields share symbolics that are free
+    ;; with any non-captured fields: this case is quite complicated
+    ;; to handle, and I don't know if we need to figure out how to handle it,
+    ;; it may just not come up
+    (cond
+      ;; check shared symbolics
+      [(let* ([small-symbolics (apply set-union (seteq) (map (compose1 list->seteq @symbolics) small-fields-filtered))]
+              [big-symbolics (apply set-union (seteq) (map (compose1 list->seteq @symbolics) big-fields-filtered))]
+              [fields-symbolics (set-union small-symbolics big-symbolics)])
+         (for/or ([obj (list small big)])
+           (for/or ([field-name skipped-fields])
+             (not (set-empty? (set-intersect (list->seteq (@symbolics (yosys:get-field obj field-name))) fields-symbolics))))))
+       #f]
+      ;; check if any fields left are a vector?, fail if so
+      [(for/or ([s small-fields-filtered]
+                [b big-fields-filtered])
+         (or (@vector? s) (@vector? b)))
+       #f]
+      [else
+       (term-subset? free-symbolics small-fields-filtered big-fields-filtered)])))
 
 (module+ test
   (require rackunit)
