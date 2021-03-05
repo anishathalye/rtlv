@@ -209,7 +209,7 @@
    ;; misc
    void void?
    ;; utility
-   printf println
+   printf print println write writeln display displayln
    ;; equality
    equal?
    ;; list

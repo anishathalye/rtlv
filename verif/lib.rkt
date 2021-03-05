@@ -28,6 +28,13 @@
          (cons (proc) (collect proc (sub1 n)))))
 
    (define (map f xs)
-     (if (null? xs) '() (cons (f (car xs)) (map f (cdr xs)))))))
+     (if (null? xs) '() (cons (f (car xs)) (map f (cdr xs)))))
+
+   (define (for-each f xs)
+     (if (null? xs)
+         (void)
+         (begin
+           (f (car xs))
+           (for-each f (cdr xs)))))))
 
 (provide global-exprs)
