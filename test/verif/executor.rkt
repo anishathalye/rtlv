@@ -75,8 +75,9 @@
     (match-define (finished v c2) f)
     (check-pred
      unsat?
-     (verify #:assume (assert (R f1 c1))
-              #:guarantee (assert (and (equal? v out-f) (R f2 c2)))))))
+     (verify
+      (begin (assume (R f1 c1))
+             (assert (and (equal? v out-f) (R f2 c2))))))))
 
 (test-case "R initial"
   (check-pred unsat? (verify (assert (R ideal:s0 c0)))))
@@ -99,5 +100,6 @@
   (define final (run '(recover) c1))
   (for ([f final])
     (match-define (finished v c2) f)
-    (check-pred unsat? (verify #:assume (assert (R f1 c1))
-                                 #:guarantee (assert (R f1 c2))))))
+    (check-pred unsat? (verify
+                        (begin (assume (R f1 c1))
+                               (assert (R f1 c2)))))))

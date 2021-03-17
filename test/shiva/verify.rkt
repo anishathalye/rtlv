@@ -62,7 +62,7 @@
          #:hints hints
          #:print-style 'names
          #:try-verify-after 450)))))
-  (check-pred empty? (@asserts))
+  (check-true (@vc-assumes (@vc)))
   (check-equal? ncycles 472)
   (check-true (string-contains? output "-> sat!"))
   (check-true (string-contains? output "cycle 472"))
@@ -90,7 +90,7 @@
          #:hints hints
          #:print-style 'names
          #:try-verify-after 450)))))
-  (check-pred empty? (@asserts))
+  (check-true (@vc-assumes (@vc)))
   (check-equal? ncycles 472)
   (check-true (string-contains? output "-> sat!"))
   (check-true (string-contains? output "cycle 472"))
