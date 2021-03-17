@@ -13,8 +13,7 @@
                          vector?
                          (vectorof @constant?))]
   [concrete-head? (-> any/c
-                      boolean?)]
-  [concrete? (-> any/c boolean?)]))
+                      boolean?)]))
 
 (define name-count (make-hash))
 
@@ -43,20 +42,3 @@
 
 (define (concrete-head? expr)
   (not (or (@term? expr) (@union? expr))))
-
-;; TODO replace this with built-in concrete? in Rosette 4
-;; see https://github.com/emina/rosette/pull/183
-(define (concrete? val)
-  (match val
-    [(? @union?) #f]
-    [(? @expression?) #f]
-    [(? @constant?) #f]
-    [(box v) (concrete? v)]
-    [(? list?) (for/and ([v val]) (concrete? v))]
-    [(cons x y) (and (concrete? x) (concrete? y))]
-    [(vector vs ...) (for/and ([v vs]) (concrete? v))]
-    [(and (? @typed?) (app @get-type t))
-     (match (@type-deconstruct t val)
-       [(list (== val)) #t]
-       [components (for/and ([v components]) (concrete? v))])]
-    [_ #t]))
