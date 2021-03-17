@@ -1,6 +1,7 @@
 #lang rosette/safe
 
 (require
+ (only-in rosette/base/core/bool [@true? true?])
  (for-syntax syntax/parse racket/syntax)
  (prefix-in ! racket/base)
  syntax/parse/define
@@ -24,31 +25,39 @@
   (if* test-expr (thunk then-expr) (thunk else-expr)))
 
 ; this is a workaround for Rosette's `if` statement producing assertions
-; when it's not necessary. `if` eventually calls `speculate` to evaluate
-; the then and else expressions. before doing so, `speculate` appends to
-; the path condition with `test` or `(! test)`; sometimes, this immediately
+; when it's not necessary. `if` eventually calls `eval-assuming` to evaluate
+; the then and else expressions. before doing so, `eval-assuming` augments
+; the verification condition with the guard; sometimes, this immediately
 ; results in an exception due to the path being infeasible, and so `if`
-; adds an assertion that path condition implies that the test must be true
-; or false (depending on which branch failed). this assertion,
-; even though it's useless, sometimes gets added to the assertion store,
+; adds an assertion that the path condition (vc-assumes (vc)) implies that
+; the test must be true or false (depending on which branch failed). this assertion,
+; even though it's useless, sometimes gets added to the vc,
 ; because `(&& a b)`, which is used when augmenting the path condition,
 ; sometimes results in a concrete Racket value of `#f`, but `(=> a (! b))`,
 ; which is used when adding an assertion, does not simplify in Racket to `#t`
 ; even though it is provably so.
 ;
+; this is an example of such a program:
+;     (define-symbolic* a1 a2 boolean?)
+;     (if a1 (if a2 0 (if (&& a1 a2) 1 2)) 3)
+;
+; after running this program, the (vc) is:
+;     (vc (|| (! a1$0) (|| a2$1 (&& (&& a1$0 (! a2$1)) (! (&& a1$0 a2$1))))) #t)
+;
 ; this thin wrapper around Rosette's `if` does this test eagerly, looking
-; at the combination of the path condition with the test, and if it can be
-; determined that the other path is infeasible, it skips evaluating it
-; altogether.
+; at the combination of the verification condition's assumption along
+; with the test, and if it can be determined that the other path is
+; infeasible, it skips evaluating it altogether.
 ;
 ; this should be safe to use with arbitrary Rosette code (even code
 ; e.g. involving mutation).
 (define (if* test-expr then-expr else-expr)
-  (define test (! (false? test-expr)))
+  (define test (true? test-expr))
+  (define assumes (vc-assumes (vc)))
   (!cond
-   [(!or (!eq? test #t) (!not (&& (pc) (! test))))
+   [(!or (!eq? test #t) (!not (&& assumes (! test))))
     (then-expr)]
-   [(!or (!eq? test #f) (!not (&& (pc) test)))
+   [(!or (!eq? test #f) (!not (&& assumes test)))
     (else-expr)]
    [else
     (if test (then-expr) (else-expr))]))
