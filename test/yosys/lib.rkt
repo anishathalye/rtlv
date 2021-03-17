@@ -7,10 +7,10 @@
 
 (test-case "if"
   (@define-symbolic a b @boolean?)
-  (check-pred empty? (@asserts))
+  (check-true (@vc-assumes (@vc)))
   (define t
     ($ite a ($ite b 0 ($ite (@&& a b) 1 2)) 3))
-  (check-pred empty? (@asserts))
+  (check-true (@vc-assumes (@vc)))
   ; a quick sanity check to make sure we didn't break symbolic evaluation
   (check-equal? (@evaluate t (@solve (@assert (@and a b)))) 0)
   (check-equal? (@evaluate t (@solve (@assert (@and a (@not b))))) 2))
@@ -27,10 +27,10 @@
   (check-pred @unsat? (@verify (@assert (@equal? (reference-xor a b c d) ($xor a b c d)))))
   (check-pred @unsat? (@verify (@assert (@equal? (reference-xor a b c d e) ($xor a b c d e))))))
 
-(test-case "select/store asserts"
+(test-case "select/store assumes"
   (@define-symbolic* i (@bitvector 3))
   (define v (@vector 0 1 2 3 4 5 6 7))
   ($select v i)
-  (check-pred empty? (@asserts))
+  (check-true (@vc-assumes (@vc)))
   ($store v i -1)
-  (check-pred empty? (@asserts)))
+  (check-true (@vc-assumes (@vc))))

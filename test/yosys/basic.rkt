@@ -12,12 +12,10 @@
   (check-pred
    unsat?
    (verify
-    #:assume
     (begin
-      (assert (equal? (|counter_n en| s0) #f))
-      (assert (equal? (|counter_n nrst| s0) #t)))
-    #:guarantee
-    (assert (equal? (|counter_n count| s0) (|counter_n count| s1))))))
+      (assume (equal? (|counter_n en| s0) #f))
+      (assume (equal? (|counter_n nrst| s0) #t))
+      (assert (equal? (|counter_n count| s0) (|counter_n count| s1)))))))
 
 (test-case "basic verification: counter wraparound even when no reset"
   (define s0 (update-counter_s
@@ -26,7 +24,6 @@
   (define s1 (counter_t s0))
   (define model
     (verify
-     #:guarantee
      (assert ((|counter_n count| s0) . bvule . (|counter_n count| s1)))))
   (check-pred sat? model)
   (check-equal?

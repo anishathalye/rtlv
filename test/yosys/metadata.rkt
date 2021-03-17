@@ -14,10 +14,9 @@
   (check-pred
    unsat?
    (verify
-    #:assume
-    (assert (equal? (input-nrst i) #t))
-    #:guarantee
-    (assert q))))
+    (begin
+      (assume (equal? (input-nrst i) #t))
+      (assert q)))))
 
 (test-case "packaged metadata"
   (define s0 (new-zeroed-counter_s))
