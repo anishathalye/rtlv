@@ -11,5 +11,4 @@
  "concretize.rkt"
  "convenience.rkt"
  "debug.rkt"
- "dependence.rkt"
- "hacks.rkt")
+ "dependence.rkt")
