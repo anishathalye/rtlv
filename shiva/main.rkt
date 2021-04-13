@@ -8,9 +8,9 @@
 
 (provide
  (contract-out
-  [with-invariants (->*
-                    (dynamically-addressable? (-> dynamically-addressable? any))
-                    (dynamically-addressable?)
+  [with-invariants (->
+                    dynamically-addressable?
+                    (-> dynamically-addressable? any)
                     dynamically-addressable?)]
   [verify-deterministic-start (->*
                                ((-> (and/c yosys-module? dynamically-addressable?))
@@ -48,28 +48,15 @@
 ;
 ; it won't work, for example, for a large memory where a part of it
 ; is a constant, but the rest is undefined at initialization
-(define (with-invariants symbolic-state invariant-fn [fallback #f])
-  (define state symbolic-state)
-  (define model-example
-    (@solve (@assert (invariant-fn state))))
-  (unless (@sat? model-example)
-    (error 'with-invariants "invariant unsatisfiable"))
-  (for/struct ((n v) state)
-    (define v-example (@evaluate v model-example))
-    ; note: v-example may still have symbolics in it (we didn't call complete-solution on the model).
-    ; this is an optimization: if a field is not concrete, we can skip it
-    ; without an expensive call to the solver
-    (define must-be-same
-      (and (@concrete? v-example)
-           (@unsat?
-            (@solve
-             (@assert
-              (@and (invariant-fn state)
-                    (@not (@equal? v v-example))))))))
-    (cond
-      [must-be-same v-example]
-      [fallback (get-field fallback n)]
-      [else v])))
+(define (with-invariants symbolic-state invariant-fn)
+  (define result
+    (@with-vc
+      (@begin
+        (@assume (invariant-fn symbolic-state))
+        (@concretize-fields symbolic-state))))
+  (when (@failed? result)
+    (error 'with-invariants "concretization failed"))
+  (@result-value result))
 
 (define (time* thunk)
   (define start (current-inexact-milliseconds))
