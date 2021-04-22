@@ -76,6 +76,8 @@
     equal?
     ;; list
     cons car cdr caar cadr cdar cddr null? empty? first second third fourth list? list length reverse
+    ;; vector
+    vector? vector vector-length vector-ref vector->list list->vector vector-append
     ;; boolean
     not
     ;; integer
@@ -93,7 +95,7 @@
     ;; additional operators
     bit lsb msb bvzero? bvadd1 bvsub1 bvsmin bvumin bvsmax bvumax bvrol bvror rotate-left rotate-right bitvector->bits bitvector->bool bool->bitvector
     ;; yosys generic
-    get-field update-field)
+    get-field update-field update-fields)
    (list
     (cons 'bv $bv)
     (cons 'bitvector $bitvector))))
