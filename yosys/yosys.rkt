@@ -361,12 +361,15 @@
             (provide get-output)
             ;; packaging up this stuff nicely together
             (define metadata (meta
+                              #,(format-id stx "new-symbolic-~a_s" module-name)
+                              #,(format-id stx "new-zeroed-~a_s" module-name)
                               #,(format-id stx "step")
                               #,(format-id stx "input")
                               #,(format-id stx "input*")
                               #,(format-id stx "input-getters")
                               #,(format-id stx "with-input")
                               #,(format-id stx "output")
+                              #,(format-id stx "output*")
                               #,(format-id stx "output-getters")
                               get-input
                               get-output))

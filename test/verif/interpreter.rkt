@@ -1,7 +1,7 @@
 #lang rosette/safe
 
 (require
- verif/interpreter
+ verif/driver/interpreter
  (only-in "../yosys/verilog/counter.rkt" new-zeroed-counter_s metadata)
  rackunit)
 

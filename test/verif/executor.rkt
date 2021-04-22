@@ -24,7 +24,7 @@
 (require (prefix-in ideal: 'ideal)
          "driver/lockbox.rkt"
          (except-in "../yosys/verilog/lockbox.rkt" step)
-         (except-in verif run*)
+         (except-in verif/driver run*)
          yosys
          (only-in shiva with-invariants)
          (only-in racket/base for)

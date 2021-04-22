@@ -1,8 +1,12 @@
 #lang rosette/safe
 
 (require
+ "../syntax.rkt"
+ "../value.rkt"
+ "../environment.rkt"
+ (prefix-in $ "../lifted.rkt")
+ (only-in racket/base error)
  (prefix-in lib: "lib.rkt")
- (only-in racket error string? [symbol? racket/symbol?])
  rosette/lib/destruct
  syntax/parse/define
  yosys/meta
@@ -16,95 +20,12 @@
  (struct-out state)
  (struct-out globals))
 
-(define (symbol? v)
-  (for/all ([v v])
-    (racket/symbol? v)))
-
-;; Expressions
-
-(define (tag expr)
-  (if (not (list? expr))
-      #f
-      (car expr)))
-
-(define (variable? expr)
-  (symbol? expr))
-
-(define (literal? expr)
-  (or (boolean? expr) (integer? expr) (string? expr)))
-
-(define (lambda? expr)
-  (equal? (tag expr) 'lambda))
-
-(define (lambda-formals expr)
-  (cadr expr))
-
-(define (maybe-wrap-body expr)
-  (if (null? (cdr expr))
-      ;; body is a single expression, return it
-      (car expr)
-      ;; body is a sequence, wrap it in sequence
-      `(begin ,@expr)))
-
-(define (lambda-body expr)
-  (maybe-wrap-body (cddr expr)))
-
-(define (if? expr)
-  (equal? (tag expr) 'if))
-
-(define (if-condition expr)
-  (cadr expr))
-
-(define (if-then expr)
-  (caddr expr))
-
-(define (if-else expr)
-  (cadddr expr))
-
-(define (and? expr)
-  (equal? (tag expr) 'and))
-
-(define (and-contents expr)
-  (cdr expr))
-
-(define (or? expr)
-  (equal? (tag expr) 'or))
-
-(define (or-contents expr)
-  (cdr expr))
-
-(define (let? expr)
-  (equal? (tag expr) 'let))
-
-(define (let-bindings expr)
-  (cadr expr))
-
-(define (let-body expr)
-  (maybe-wrap-body (cddr expr)))
-
-(define (begin? expr)
-  (equal? (tag expr) 'begin))
-
-(define (begin-contents expr)
-  (cdr expr))
+(struct builtin
+  (name)
+  #:transparent)
 
 (define (uninterpreted? expr)
   (member (tag expr) '(yield hint)))
-
-(define (app? expr)
-  (list? expr))
-
-(define (app-f expr)
-  (car expr))
-
-(define (app-args expr)
-  (cdr expr))
-
-(define (quote? expr)
-  (equal? (tag expr) 'quote))
-
-(define (quote-get expr)
-  (second expr))
 
 ;; Values
 ;;
@@ -126,70 +47,10 @@
 ;; checks if v is a value, but doesn't include input/output (because
 ;; that's slightly more annoying, those structs are supplied via
 ;; metadata)
-(define (basic-value? v)
-  (or (void? v)
-      (boolean? v)
-      (integer? v)
-      (string? v)
-      (bv? v)
-      (symbol? v)
-      (null? v)
-      (and (cons? v) (basic-value? (car v)) (basic-value? (cdr v)))
-      (closure? v)
-      (builtin? v)
-      (circuit-op? v)))
-
-(struct closure
-  (expr environment)
-  #:transparent)
-
-(struct builtin
-  (name)
-  #:transparent)
 
 (struct circuit-op
   (name)
   #:transparent)
-
-;; Environment
-
-(define (make-assoc)
-  '()) ; list of pairs of symbol, value
-
-(define (assoc-contains env name)
-  (if (null? env)
-      #f
-      (or (equal? name (caar env))
-          (assoc-contains (cdr env) name))))
-
-(define (assoc-lookup env name)
-  (if (null? env)
-      (error 'assoc-lookup "assoc does not contain ~v" name)
-      (if (equal? name (caar env))
-          (cdar env)
-          (assoc-lookup (cdr env) name))))
-
-(define (assoc-remove env name)
-  (if (null? env)
-      env
-      (let ([base (assoc-remove (cdr env) name)]
-            [binding (car env)])
-        (if (equal? name (car binding))
-            base
-            (cons binding base)))))
-
-(define (assoc-extend env name value)
-  (cons (cons name value) (assoc-remove env name)))
-
-(define (assoc-extend* env bindings)
-  (if (null? bindings)
-      env
-      (begin
-        (let* ([binding (car bindings)]
-               [name (car binding)]
-               [value (cdr binding)]
-               [bindings (cdr bindings)])
-          (assoc-extend* (assoc-extend env name value) bindings)))))
 
 ;; Built-in functions
 ;;
@@ -205,33 +66,37 @@
     (cont (apply f values) globals)))
 
 (define simple-builtins
-  (pair-symbol-value
-   ;; misc
-   void void?
-   ;; utility
-   printf print println write writeln display displayln
-   ;; equality
-   equal?
-   ;; list
-   cons car cdr caar cadr cdar cddr null? empty? first second third fourth list? list length reverse
-   ;; boolean
-   not
-   ;; integer
-   + - * quotient modulo zero? add1 sub1 abs max min = < <= > >= expt integer?
-   ;; bv
-   bv bv?
-   ;; comparison operators
-   bveq bvslt bvult bvsle bvule bvsgt bvugt bvsge bvuge
-   ;; bitwise operators
-   bvnot bvand bvor bvxor bvshl bvlshr bvashr
-   ;; arithmetic operators
-   bvneg bvadd bvsub bvmul bvsdiv bvudiv bvsrem bvurem bvsmod
-   ;; conversion operators
-   concat extract sign-extend zero-extend bitvector->integer bitvector->natural integer->bitvector
-   ;; additional operators
-   bit lsb msb bvzero? bvadd1 bvsub1 bvsmin bvumin bvsmax bvumax bvrol bvror rotate-left rotate-right bitvector->bits bitvector->bool bool->bitvector
-   ;; yosys generic
-   get-field update-field))
+  (append
+   (pair-symbol-value
+    ;; misc
+    void void?
+    ;; utility
+    printf print println write writeln display displayln
+    ;; equality
+    equal?
+    ;; list
+    cons car cdr caar cadr cdar cddr null? empty? first second third fourth list? list length reverse
+    ;; boolean
+    not
+    ;; integer
+    + - * quotient modulo zero? add1 sub1 abs max min = < <= > >= expt integer?
+    ;; bv
+    bv?
+    ;; comparison operators
+    bveq bvslt bvult bvsle bvule bvsgt bvugt bvsge bvuge
+    ;; bitwise operators
+    bvnot bvand bvor bvxor bvshl bvlshr bvashr
+    ;; arithmetic operators
+    bvneg bvadd bvsub bvmul bvsdiv bvudiv bvsrem bvurem bvsmod
+    ;; conversion operators
+    concat extract sign-extend zero-extend bitvector->integer bitvector->natural integer->bitvector
+    ;; additional operators
+    bit lsb msb bvzero? bvadd1 bvsub1 bvsmin bvumin bvsmax bvumax bvrol bvror rotate-left rotate-right bitvector->bits bitvector->bool bool->bitvector
+    ;; yosys generic
+    get-field update-field)
+   (list
+    (cons 'bv $bv)
+    (cons 'bitvector $bitvector))))
 
 (define (builtin-apply values globals cont)
   (local-apply (car values) (cadr values) globals cont))
@@ -429,6 +294,8 @@
         (cont (apply (meta-input* meta) args) globals)]
        [(output)
         (cont (apply (meta-output meta) args) globals)]
+       [(output*)
+        (cont (apply (meta-output* meta) args) globals)]
        [else
         (cond
           [(assoc-contains (meta-input-getters meta) op)
@@ -458,7 +325,7 @@
        (cont value globals))]
     ;; value literal?
     [(literal? expr)
-     (cont expr globals)]
+     (cont (literal-value expr) globals)]
     ;; quote?
     [(quote? expr)
      (let ([val (quote-get expr)])
@@ -539,7 +406,8 @@
     (cons 'input (circuit-op 'input))
     (cons 'input* (circuit-op 'input*))
     ;; output constructor
-    (cons 'output (circuit-op 'output)))
+    (cons 'output (circuit-op 'output))
+    (cons 'output* (circuit-op 'output*)))
    ;; input getters
    (map make-op (meta-input-getters metadata))
    ;; output getters

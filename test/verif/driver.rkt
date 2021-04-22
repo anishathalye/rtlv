@@ -3,7 +3,7 @@
 (require
  (except-in "../yosys/verilog/counter.rkt" step)
  "driver/counter.rkt"
- (only-in verif/interpreter step run*)
+ (only-in verif/driver/interpreter step run*)
  rackunit)
 
 (test-case "basic"
