@@ -83,13 +83,13 @@
   (check-pred unsat? (verify (assert (R ideal:s0 c0)))))
 
 (test-case "R step: store"
-  (define-symbolic secret password (bitvector 128))
+  (define-symbolic* secret password (bitvector 128))
   (test-step
    (ideal:store secret password)
    `(store ',secret ',password)))
 
 (test-case "R step: get"
-  (define-symbolic guess (bitvector 128))
+  (define-symbolic* guess (bitvector 128))
   (test-step
    (ideal:get guess)
    `(get ',guess)))

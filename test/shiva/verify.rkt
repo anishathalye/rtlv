@@ -63,6 +63,7 @@
          #:print-style 'names
          #:try-verify-after 450)))))
   (check-true (@vc-assumes (@vc)))
+  (check-true (@vc-asserts (@vc)))
   (check-equal? ncycles 472)
   (check-true (string-contains? output "-> sat!"))
   (check-true (string-contains? output "cycle 472"))

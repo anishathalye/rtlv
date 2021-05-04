@@ -6,7 +6,7 @@
          (prefix-in $ yosys/lib))
 
 (test-case "if"
-  (@define-symbolic a b @boolean?)
+  (@define-symbolic* a b @boolean?)
   (check-true (@vc-assumes (@vc)))
   (define t
     ($ite a ($ite b 0 ($ite (@&& a b) 1 2)) 3))
@@ -27,10 +27,10 @@
   (check-pred @unsat? (@verify (@assert (@equal? (reference-xor a b c d) ($xor a b c d)))))
   (check-pred @unsat? (@verify (@assert (@equal? (reference-xor a b c d e) ($xor a b c d e))))))
 
-(test-case "select/store assumes"
+(test-case "select/store asserts"
   (@define-symbolic* i (@bitvector 3))
   (define v (@vector 0 1 2 3 4 5 6 7))
   ($select v i)
-  (check-true (@vc-assumes (@vc)))
+  (check-true (@vc-asserts (@vc)))
   ($store v i -1)
-  (check-true (@vc-assumes (@vc))))
+  (check-true (@vc-asserts (@vc))))
