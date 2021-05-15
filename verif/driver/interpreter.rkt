@@ -65,6 +65,12 @@
   (lambda (values globals cont)
     (cont (apply f values) globals)))
 
+(define (bitvector->bytes x)
+  (define w (bitvector-size (type-of x)))
+  (if (<= w 8)
+      (list x)
+      (cons (extract (sub1 w) (- w 8) x) (bitvector->bytes (extract (- w 9) 0 x)))))
+
 (define simple-builtins
   (append
    (pair-symbol-value
@@ -95,7 +101,9 @@
     ;; additional operators
     bit lsb msb bvzero? bvadd1 bvsub1 bvsmin bvumin bvsmax bvumax bvrol bvror rotate-left rotate-right bitvector->bits bitvector->bool bool->bitvector
     ;; yosys generic
-    get-field update-field update-fields)
+    get-field update-field update-fields
+    ;; additional utility functions
+    bitvector->bytes)
    (list
     (cons 'bv $bv)
     (cons 'bitvector $bitvector))))
