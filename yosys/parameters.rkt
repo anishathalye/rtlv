@@ -85,11 +85,11 @@
 (define field-filter
   (make-parameter (to-field-filter #t)
                   (lambda (v)
-                    (unless (or (not v)
+                    (unless (or (boolean? v)
                                 (string? v)
                                 (regexp? v)
                                 ((procedure-arity-includes/c 1) v))
                       (raise-argument-error 'field-filter
-                                            "(or/c #f string? regexp? (procedure-arity-includes/c 1))"
+                                            "(or/c boolean? string? regexp? (procedure-arity-includes/c 1))"
                                             v))
                     (to-field-filter v))))
