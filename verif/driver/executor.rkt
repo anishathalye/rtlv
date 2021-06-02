@@ -1,20 +1,48 @@
 #lang racket/base
 
-(require "interpreter.rkt" "hint.rkt"
-         racket/class racket/set racket/match racket/list racket/function
-         (prefix-in yosys: yosys)
-         (prefix-in @ (combine-in rosutil rosette/safe)))
+(require
+ (prefix-in interp: "interpreter.rkt")
+ "hint.rkt"
+ racket/class racket/set racket/match racket/list racket/function
+ (prefix-in yosys: yosys)
+ (prefix-in @ (combine-in rosutil rosette/safe))
+ syntax/parse/define)
 
-(provide executor%)
+(provide executor%
+         (prefix-out executor: (struct-out state)))
+
+(struct state
+  (interpreter-state
+   pc)
+  #:transparent)
+
+;; pushes vc, evaluates body with pc added, and then ensures that vc hasn't changed
+(define (with-pc* pc expr-thunk)
+  (when (not (@vc-true? (@vc)))
+    (error 'with-pc "initial vc must be true, is ~v" (@vc)))
+  (define res (@with-vc (begin (@assume pc) (expr-thunk))))
+  (when (not (@normal? res))
+    (println res)
+    (error 'with-pc "bug: evaluation did not terminate normally (all paths infeasible)"))
+  (when (not (eq? (@vc-asserts (@result-state res)) #t))
+    (error 'with-pc "evaluation of expression produced assertions")) ; we could probably handle this by checking and then discharging the asserts
+  (@result-value res))
+
+(define-simple-macro (with-pc pc expr)
+  (with-pc* pc (lambda () expr)))
+
+(define (finished? st)
+  (not (interp:state? (state-interpreter-state st))))
 
 (define executor%
   (class object%
     (super-new)
     (init initial-state)
     (init-field hint-db)
+    (init [precondition #t])
     (define free-variables (weak-seteq))
     (define completed '())
-    (define working (list initial-state))
+    (define working (list (state initial-state precondition)))
     (define waiting '())
     (define waiting-for-debug* #f)
     (define merge-hint #f)
@@ -38,7 +66,7 @@
     (define (run-single st)
       (define st* (run-to-next-hypercall st))
       (cond
-        [(not (state? st*))
+        [(finished? st*)
          ;; value
          (set! completed (cons st* completed))]
         [else
@@ -46,7 +74,7 @@
          (handle-hypercall st*)]))
 
     (define (handle-hypercall st)
-      (define call (state-control st))
+      (define call (interp:state-control (state-interpreter-state st)))
       (unless (list? call)
         (error 'handle-hypercall "hypercall must be a concrete list, not a term (~v), try concretizing more?" call))
       (match-define (list fun hint-name) call)
@@ -55,50 +83,65 @@
         [(yield)
          (unless (fixpoint? hint)
            (error 'handle-hypercall "argument to yield must be a fixpoint hint"))
-         (define g (state-globals st))
-         (define ckt (globals-circuit g))
-         (define metadata (globals-meta g))
+         (define g (interp:state-globals (state-interpreter-state st)))
+         (define ckt (interp:globals-circuit g))
+         (define metadata (interp:globals-meta g))
          (define ckt-step (yosys:meta-step metadata))
          (match-define (fixpoint setup abstr len step-hints) hint)
          (define fp
            (parameterize ([@current-solver (solver hint)])
-             (compute-fixpoint
-              ckt-step
-              ckt
-              setup
-              (make-field-abstractor abstr)
-              len
-              step-hints)))
+             (with-pc (state-pc st)
+               (compute-fixpoint
+                ckt-step
+                ckt
+                setup
+                (make-field-abstractor abstr)
+                len
+                step-hints))))
          ;; step (interpreter) once more to advance past the call
-         (define st1 (step st))
+         (define st1 (with-pc (state-pc st) (interp:step (state-interpreter-state st))))
          ;; make one state for every point in fp, put back on working list
-         (set! working (append (for/list ([ckt fp]) (update-state-circuit st1 ckt)) working))
+         (set! working (append (for/list ([ckt fp]) (state (update-state-circuit st1 ckt) (state-pc st))) working))
          (dprintf "info: yielded, now have ~a threads, ~a waiting~n" (length working) (length waiting))]
         [(hint)
          (parameterize ([@current-solver (solver hint)])
            (cond
              [(circuit-hint? hint)
-              (let* ([ckt (globals-circuit (state-globals st))]
-                     [ckt* (apply-circuit-hint hint ckt)]
-                     [st* (update-state-circuit st ckt*)])
+              (let* ([ckt (interp:globals-circuit (interp:state-globals (state-interpreter-state st)))]
+                     [ckt* (with-pc (state-pc st) (apply-circuit-hint hint ckt))]
+                     [st* (update-state-circuit (state-interpreter-state st) ckt*)])
                 ;; step once more to advance past the call, put back on working list
-                (set! working (cons (step st*) working)))]
+                (set! working (cons (state (with-pc (state-pc st) (interp:step st*)) (state-pc st)) working)))]
+             [(case-split? hint)
+              ;; split interpreter N ways, augmenting path condition with splits
+              ;;
+              ;; if exhaustive, check that the split is indeed an
+              ;; exhaustive split (given current pc)
+              ;;
+              ;; if not exhaustive, generate another split that's the
+              ;; negation of all the splits and add it (but only if it's satisfiable)
+              (define splits (do-case-split st hint))
+              ;; step once more to advance past the call
+              (set! working
+                    (append
+                     (map (lambda (st) (state (with-pc (state-pc st) (interp:step (state-interpreter-state st))) (state-pc st))) splits)
+                     working))]
              [(merge? hint)
               ;; step once more to advance past the call, put on merge list
-              (set! waiting (cons (step st) waiting))
+              (set! waiting (cons (state (with-pc (state-pc st) (interp:step (state-interpreter-state st))) (state-pc st)) waiting))
               (set! waiting-for-debug* #f)
               (unless merge-hint
                 (set! merge-hint hint))]
              [(debug*? hint)
               ;; step once more to advance past the call, put on waiting list
-              (set! waiting (cons (step st) waiting))
+              (set! waiting (cons (state (with-pc (state-pc st) (interp:step (state-interpreter-state st))) (state-pc st)) waiting))
               (unless waiting-for-debug*
                 (set! waiting-for-debug* (debug*-fn hint)))]
              [(debug? hint)
               ;; pass interpreter state to debug function
               ((debug-fn hint) st)
               ;; step once more to advance past the call, put back on working list
-              (set! working (cons (step st) working))]
+              (set! working (cons (state (with-pc (state-pc st) (interp:step (state-interpreter-state st))) (state-pc st)) working))]
              [else (error 'handle-hypercall "unimplemented hint: ~a" hint)]))]))
 
     (define (apply-circuit-hint hint ckt)
@@ -132,33 +175,65 @@
       (set! waiting '())
       (set! waiting-for-debug* #f))
 
+    (define (do-case-split st hint)
+      (define pc (state-pc st))
+      (match-define (case-split splits* exhaustive) hint)
+      (define splits
+        (if exhaustive
+            splits*
+            (cons (@not (@foldl @|| #f splits*)) splits*)))
+      ;; prune unsat splits
+      (define pruned-splits
+        (filter (lambda (p) (not (@unsat? (@solve (@assert (@&& pc p)))))) splits))
+      ;; verify that the current pc implies that at least one of the splits must hold
+      ;;
+      ;; if we have splits p1, p2, ..., pn, we prove _here_ that
+      ;; pc => (p1 \/ p2 \/ ... \/ pn), and we create n threads
+      ;; with pcs (pc /\ p1), (pc /\ p2), ..., (pc /\ pn)
+      (define any-split (foldl @|| #f pruned-splits))
+      (when (not (@unsat? (@verify (@assert (@implies pc any-split)))))
+        (error 'do-case-split "failed to prove exhaustiveness"))
+      (define res
+        (for/list ([p pruned-splits])
+          (state (state-interpreter-state st) (@&& pc p))))
+      (dprintf "info: case split ~a ways~n" (length res))
+      res)
+
     (define (merge-states)
+      ;; first, partition by path condition (we never merge across different PCs)
+      (define by-pc (group-by state-pc waiting))
+      (set! working (apply append (map merge-states-for-pc by-pc)))
+      (dprintf "info: merged, reduced from ~v interp:states to ~v interp:states~n" (length waiting) (length working))
+      (set! waiting '())
+      (set! merge-hint #f))
+
+    (define (merge-states-for-pc sts)
       ;; right now, we only handle the case where the rest of the
       ;; interpreter state is identical between all forks; in the future, we
       ;; could partition by interpreter state and support multiple, but I don't
       ;; think this is necessary right now
-      (define template-state (first waiting))
-      (for ([st (rest waiting)])
+      (define template-state (first sts))
+      (define template-interpreter (state-interpreter-state template-state))
+      (for ([st (rest sts)])
+        (define ist (state-interpreter-state st))
         ;; note: we don't check globals, because we're expecting the
         ;; circuit to differ, and we're not expecting the environment or meta
         ;; to differ (it never changes)
-        (unless (or (finished? st)
-                    (and (@=? (state-control st) (state-control template-state))
-                         (@=? (state-environment st) (state-environment template-state))
-                         (@=? (state-continuation st) (state-continuation template-state))))
-          (error 'merge-states "states differ in aspects other than circuit")))
+        (unless (or (and (interp:finished? ist) (interp:finished? template-interpreter)) ; XXX why do we need this check?
+                    (and (@=? (interp:state-control ist) (interp:state-control template-interpreter))
+                         (@=? (interp:state-environment ist) (interp:state-environment template-interpreter))
+                         (@=? (interp:state-continuation ist) (interp:state-continuation template-interpreter))))
+          (error 'merge-states "interp:states differ in aspects other than circuit")))
       (define ckts
         (shrink-by-key
          (map
-          (lambda (s) (if (finished? s) (finished-circuit s) (globals-circuit (state-globals s))))
-          waiting)
+          (lambda (st)
+            (define s (state-interpreter-state st))
+            (if (interp:finished? s) (interp:finished-circuit s) (interp:globals-circuit (interp:state-globals s))))
+          sts)
          (merge-key merge-hint)))
-      ;; next working set
-      (set! working (for/list ([ckt ckts])
-                      (update-state-circuit template-state ckt)))
-      (dprintf "info: merged, reduced from ~v states to ~v states~n" (length waiting) (length working))
-      (set! waiting '())
-      (set! merge-hint #f))
+      (for/list ([ckt ckts])
+        (state (update-state-circuit template-interpreter ckt) (state-pc template-state))))
 
     (define (compute-fixpoint step s0 setup-cycles abstract-fn cycle-length step-hints)
       (define (step* ckt)
@@ -179,17 +254,17 @@
 
     (define (shrink-by-key s key)
       (define groups (group-by key s))
-      (dprintf "info: merging, have ~a states grouped into ~a partitions~n" (length s) (length groups))
+      (dprintf "info: merging, have ~a interp:states grouped into ~a partitions~n" (length s) (length groups))
       (apply append (map shrink-set groups)))
 
     ;; aims to be sound, can't be "complete" (what is complete?)
     (define (shrink-set s)
-      (dprintf "info: merging ~a states~n" (length s))
+      (dprintf "info: merging ~a interp:states~n" (length s))
       (let loop ([pending (reverse s)]
                  [keep '()])
         (if (empty? pending)
             (begin
-              (dprintf "info: merged into ~a states~n" (length keep))
+              (dprintf "info: merged into ~a interp:states~n" (length keep))
               keep)
             (let ()
               (define p (first pending))
@@ -203,26 +278,24 @@
                   (loop pp (cons p keep)))))))
 
     (define (update-state-circuit st ckt)
-      (if (state? st)
-          (state
-           (state-control st)
-           (state-environment st)
-           (update-circuit (state-globals st) ckt)
-           (state-continuation st))
-          (finished (finished-value st) ckt)))
+      (if (interp:state? st)
+          (interp:state
+           (interp:state-control st)
+           (interp:state-environment st)
+           (interp:update-circuit (interp:state-globals st) ckt)
+           (interp:state-continuation st))
+          (interp:finished (interp:finished-value st) ckt)))
 
-    (define (run-to-next-hypercall stv)
-      (if (state? stv)
-          ;; state
-          (begin
-            (if (in-hypercall? stv)
-                stv ; return as-is
-                (run-to-next-hypercall (step stv))))
+    (define (run-to-next-hypercall st)
+      (if (not (finished? st))
+          (if (in-hypercall? (state-interpreter-state st))
+              st ; return as-is
+              (run-to-next-hypercall (state (with-pc (state-pc st) (interp:step (state-interpreter-state st))) (state-pc st))))
           ;; value
-          stv))
+          st))
 
     (define (in-hypercall? st)
-      (uninterpreted? (state-control st)))
+      (interp:uninterpreted? (interp:state-control st)))
 
     (define/public (run!)
       (cond

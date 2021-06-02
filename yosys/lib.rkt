@@ -2,10 +2,12 @@
 
 (require
  (only-in rosette/base/core/bool [@true? true?])
+ (only-in rosette/base/core/polymorphic ite)
  (for-syntax syntax/parse racket/syntax)
- (prefix-in ! racket/base)
+ (prefix-in ! (combine-in racket/base racket/match))
  syntax/parse/define
  "parameters.rkt"
+ "libopt.rkt"
  rosutil)
 
 (provide
@@ -60,7 +62,7 @@
    [(!or (!eq? test #f) (!not (&& assumes test)))
     (else-expr)]
    [else
-    (if test (then-expr) (else-expr))]))
+    (rewrite-if (if test (then-expr) (else-expr)))]))
 
 ; we could implement this with `equal?`, but that is slow. Yosys uses `=` mostly for
 ; bitvectors, and only in a few cases for booleans. The boolean cases are:
@@ -79,8 +81,8 @@
 (define (distinct x y)
   (not (bveq x y)))
 
-(define (extractor i j)
-  (lambda (x) (extract i j x)))
+(define ((extractor i j) x)
+  (extract i j x))
 
 (define-simple-macro (_ (~datum extract) i:expr j:expr)
   (extractor i j))

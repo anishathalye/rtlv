@@ -54,7 +54,7 @@
        (get ',password)))
   (define final (run prog c0))
   (check-equal? (length final) 2) ; make sure merge worked
-  (for ([f final])
+  (for ([f (map executor:state-interpreter-state final)])
     (match-define (finished v c1) f)
     (check-pred unsat? (verify (assert (equal? v secret))))))
 
@@ -71,7 +71,7 @@
   (define c1 (new-symbolic-lockbox_s))
   (define-values (out-f f2) (op f1))
   (define final (run prog c1))
-  (for ([f final])
+  (for ([f (map executor:state-interpreter-state final)])
     (match-define (finished v c2) f)
     (check-pred
      unsat?
@@ -98,7 +98,7 @@
   (define f1 (ideal:new-symbolic-state))
   (define c1 (new-symbolic-lockbox_s))
   (define final (run '(recover) c1))
-  (for ([f final])
+  (for ([f (map executor:state-interpreter-state final)])
     (match-define (finished v c2) f)
     (check-pred unsat? (verify
                         (begin (assume (R f1 c1))

@@ -1,11 +1,15 @@
 #lang racket/base
 
-(require (for-syntax racket/base syntax/parse))
+(require
+ (prefix-in @ rosette/safe)
+ (for-syntax racket/base syntax/parse))
 
 (provide
  (struct-out hint)
  (struct-out merge)
  (struct-out fixpoint)
+ (struct-out case-split)
+ case-split*
  (struct-out debug)
  (struct-out debug*)
  (struct-out circuit-hint)
@@ -18,6 +22,21 @@
 (struct merge hint (key))
 
 (struct fixpoint hint (setup-cycles abstract-field-filter cycle-length step-hints))
+
+(struct case-split hint (splits exhaustive))
+
+(define (case-split* splits)
+  (case-split
+   (let loop ([acc '()]
+              [ps splits]
+              [pc #t])
+     (if (null? ps)
+         (cons pc acc)
+         (loop
+          (cons (@&& pc (car ps)) acc)
+          (cdr ps)
+          (@&& pc (@not (car ps))))))
+   #t))
 
 (struct debug hint (fn))
 
