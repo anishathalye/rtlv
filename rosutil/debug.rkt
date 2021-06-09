@@ -94,7 +94,7 @@
 ; finds suspicously large terms among the elements of a module's state
 ;
 ; state-getters has the same construction as the argument of the same name to
-; verify-deterministic-start in rtl/shiva
+; verify-deterministic-start in rtlv/shiva
 ;
 ; returns number of terms with value-depth >= threshold
 ; additionally outputs information about these terms if output? is #t
