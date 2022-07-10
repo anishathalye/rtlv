@@ -1,3 +1,7 @@
+**This package is deprecated. See [anishathalye/knox](https://github.com/anishathalye/knox) for a framework for formally verifying full functional correctness and security of circuits.**
+
+---
+
 # rtlv [![Build Status](https://github.com/anishathalye/rtlv/workflows/CI/badge.svg)](https://github.com/anishathalye/rtlv/actions?query=workflow%3ACI)
 
 Tools for reasoning about circuits in [Rosette]/[Racket].
