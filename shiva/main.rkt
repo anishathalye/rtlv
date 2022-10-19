@@ -9,23 +9,23 @@
 (provide
  (contract-out
   [with-invariants (->
-                    dynamically-addressable?
-                    (-> dynamically-addressable? any)
-                    dynamically-addressable?)]
+                    @addressable?
+                    (-> @addressable? any)
+                    @addressable?)]
   [verify-deterministic-start (->*
-                               ((-> (and/c yosys-module? dynamically-addressable?))
-                                #:invariant (-> (and/c yosys-module? dynamically-addressable?) any)
-                                #:step (-> (and/c yosys-module? dynamically-addressable?) (and/c yosys-module? dynamically-addressable?))
+                               ((-> (and/c yosys-module? @addressable?))
+                                #:invariant (-> (and/c yosys-module? @addressable?) any)
+                                #:step (-> (and/c yosys-module? @addressable?) (and/c yosys-module? @addressable?))
                                 #:reset symbol?
                                 #:reset-active (or/c 'low 'high)
                                 #:inputs (listof (or/c symbol? (cons/c symbol? wire-constant?)))
-                                #:state-getters (listof (cons/c symbol? (-> (and/c yosys-module? dynamically-addressable?) any))))
-                               (#:output-getters (listof (cons/c symbol? (-> (and/c yosys-module? dynamically-addressable?) any)))
+                                #:state-getters (listof (cons/c symbol? (-> (and/c yosys-module? @addressable?) any))))
+                               (#:output-getters (listof (cons/c symbol? (-> (and/c yosys-module? @addressable?) any)))
                                 #:hints (->* (symbol?) #:rest any/c any)
                                 #:print-style (or/c 'full 'names 'none)
                                 #:try-verify-after natural-number/c
                                 #:limit (or/c #f natural-number/c)
-                                #:debug (-> natural-number/c (and/c yosys-module? dynamically-addressable?) (or/c #f @solution?) (or/c #f (and/c yosys-module? dynamically-addressable?))))
+                                #:debug (-> natural-number/c (and/c yosys-module? @addressable?) (or/c #f @solution?) (or/c #f (and/c yosys-module? @addressable?))))
                                (or/c #f natural-number/c))]))
 
 (define wire-constant?
@@ -52,8 +52,7 @@
   (define result
     (@with-vc
       (@begin
-        (@assume (invariant-fn symbolic-state))
-        (@concretize-fields symbolic-state))))
+        (@concretize-fields symbolic-state (invariant-fn symbolic-state)))))
   (when (@failed? result)
     (error 'with-invariants "concretization failed"))
   (@result-value result))
@@ -77,12 +76,12 @@
   (for/fold ([acc '()])
             ([i statics])
     (cond
-      [(symbol? i) (cons (get-field state i) acc)]
+      [(symbol? i) (cons (@get-field state i) acc)]
       [else
        ; symbol (for vector), list of indices
        (define name (car i))
        (define indices (cdr i))
-       (define field (get-field state name))
+       (define field (@get-field state name))
        (append
         (for/list ([idx indices])
           (vector-ref field idx))
@@ -144,10 +143,10 @@
             [(pair? i) i] ; pre-set value
             [(eq? i reset) (cons i (if (xor (zero? cycle) (eq? reset-active 'low)) #t #f))] ; special-case reset
             [else ; symbol
-             (define s (@fresh-symbolic i (@type-of (get-field sn i))))
+             (define s (@fresh-symbolic i (@type-of (@get-field sn i))))
              (set-add! allowed-dependencies s)
              (cons i s)])))
-      (set! sn (update-fields sn current-inputs))
+      (set! sn (@update-fields sn current-inputs))
 
       (define+time (any-hints hint-time)
         (define this-hint (hints 'general cycle sn))
@@ -165,29 +164,27 @@
                ;(define allowed-deps-list (set->list allowed-dependencies))
                (define updates
                  (for/list ([i args])
-                   (define v (get-field sn i))
+                   (define v (@get-field sn i))
                    (define ok (@unsat? (@only-depends-on/unchecked v allowed-dependencies)))
                    (cons i (if ok
                                (let ([v* (@fresh-symbolic i (@type-of v))])
                                  (set-add! allowed-dependencies v*)
                                  v*)
                                v))))
-               (set! sn (update-fields sn updates))]
+               (set! sn (@update-fields sn updates))]
               [(cons 'overapproximate args)
                (define updates
                  (for/list ([i args])
-                   (define v (get-field sn i))
-                   (define v* (if (vector? v)
-                                  (@fresh-memory-like i v)
-                                  (@fresh-symbolic i (@type-of v))))
+                   (define v (@get-field sn i))
+                   (define v* (@fresh-symbolic-like v))
                    (cons i v*)))
-               (set! sn (update-fields sn updates))]
+               (set! sn (@update-fields sn updates))]
               [(cons 'concretize args)
                (define updates
                  (for/list ([i args])
-                   (define v (get-field sn i))
+                   (define v (@get-field sn i))
                    (cons i (@concretize v))))
-               (set! sn (update-fields sn updates))])))
+               (set! sn (@update-fields sn updates))])))
         (not (not this-hint)))
       (when any-hints
         (printf "  handled hints in ~ams~n" (~r hint-time #:precision 1)))

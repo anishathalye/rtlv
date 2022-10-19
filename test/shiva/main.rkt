@@ -1,13 +1,13 @@
 #lang racket/base
 
 (require shiva
-         yosys/generic
+         rosutil
          (prefix-in @ rosette/safe)
          rackunit)
 
 (test-case "with-invariants"
   (@struct mod (x y) #:transparent
-           #:methods gen:dynamically-addressable
+           #:methods gen:addressable
            [(define (fields _) '(x y))
             (define (get-field m name)
               (case name

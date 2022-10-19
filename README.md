@@ -1,4 +1,4 @@
-**This package is deprecated. See [anishathalye/knox](https://github.com/anishathalye/knox) for a framework for formally verifying full functional correctness and security of circuits.**
+**See [anishathalye/knox](https://github.com/anishathalye/knox) for a framework for formally verifying full functional correctness and security of circuits.**
 
 ---
 
@@ -10,12 +10,11 @@ Tools for reasoning about circuits in [Rosette]/[Racket].
 
 ### rosutil
 
-Utility code related to [Rosette].
+Moved to [knox/rosutil](https://github.com/anishathalye/knox).
 
 ### yosys
 
-Interpret [Yosys] SMT2 STDT output in Rosette. Currently only supports
-flattened circuits (no hierarchy in the Yosys output).
+Interpret [Yosys] SMT2 STDT output in Rosette. Moved to [knox/yosys](https://github.com/anishathalye/knox).
 
 ### shiva
 
@@ -29,7 +28,7 @@ Run `raco pkg install` in the top-level directory to install the package.
 
 Run `raco test .` to run the tests. When possible, tests should go in the
 `test` collection. When writing tests for functionality that is not exported,
-they should go in a `test` submodule (see `yosys/reader.rkt` for an example).
+they should go in a `test` submodule.
 
 [Rosette]: https://github.com/emina/rosette
 [Racket]: https://racket-lang.org/
