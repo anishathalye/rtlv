@@ -2,7 +2,7 @@
 
 ---
 
-# rtlv [![Build Status](https://github.com/anishathalye/rtlv/workflows/CI/badge.svg)](https://github.com/anishathalye/rtlv/actions?query=workflow%3ACI)
+# rtlv [![Build Status](https://github.com/anishathalye/rtlv/actions/workflows/ci.yml/badge.svg)](https://github.com/anishathalye/rtlv/actions/workflows/ci.yml)
 
 Tools for reasoning about circuits in [Rosette]/[Racket].
 
